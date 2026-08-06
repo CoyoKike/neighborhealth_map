@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Community Resource Map</title>
+
+<!-- ============================================================
+     CONFIG — SHEET_URL is the only line that normally changes.
+
+     In Sheets:  File > Share > Publish to web > (this sheet) > CSV
+     Paste that .../pub?gid=...&output=csv URL below.
+
+     The sheet's first row must be the header. Column order does not
+     matter; columns are read by name. Extra columns are ignored.
+     ============================================================ -->
+<script>
+window.NH_CONFIG = {
+  SHEET_URL: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTbEY_cq8_Bsb8LF7EB6eTPRdBDKJ940RssqG34Vh5QHbmhObujMeodEkU2sBfus6pkQU2cDhWFWQAV/pub?gid=931034466&single=true&output=csv',
+  CENTER: [42.3601, -71.0589],
+  ZOOM:   9,
+  // Address lookup. Bounded to Massachusetts so a bare street name can't
+  // land in another state. Only called when the user submits an address.
+  GEOCODE_URL: 'https://nominatim.openstreetmap.org/search',
+  VIEWBOX:     '-73.55,42.90,-69.85,41.20'
+};
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+<style>
+/* Everything is scoped under .nh so this can be dropped straight into a
+   WordPress Custom HTML block without bleeding into the theme's styles. */
+.nh {
+  --navy:      #0d2b45;
+  --accent:    #1c75bc;
+  --accent-600:#17629f;
+  --accent-50: #eaf3fa;
+
+  --ink:       #16202b;
+  --ink-60:    #5a6672;
+  --ink-40:    #8b95a1;
+  --line:      #e3e8ed;
+  --line-soft: #eef2f6;
+  --surface:   #ffffff;
+  --canvas:    #f7f9fb;
+
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --ease: cubic-bezier(.16,1,.3,1);
+  --shadow: 0 18px 40px -22px rgba(13,43,69,.34);
+
+  font-family: 'Outfit', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--ink);
+  background: var(--canvas);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 560px;
+  container-type: inline-size;
+  -webkit-font-smoothing: antialiased;
+}
+.nh *, .nh *::before, .nh *::after { box-sizing: border-box; }
+.nh button, .nh input, .nh select { font: inherit; color: inherit; }
+.nh :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.nh .sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ---------- toolbar ---------- */
+.nh-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  position: relative; z-index: 900;
+}
+
+/* ---------- search ---------- */
+.nh-search { position: relative; flex: 1 1 300px; min-width: 240px; max-width: 430px; }
+.nh-search-field {
+  display: flex; align-items: center; gap: 9px;
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 0 6px 0 12px;
+  transition: border-color .24s var(--ease), background .24s var(--ease);
+}
+.nh-search-field:hover { border-color: #cfd8e0; }
+.nh-search-field:focus-within { background: #fff; border-color: var(--accent); }
+.nh-search-ico { width: 16px; height: 16px; flex: none; color: var(--ink-40); }
+.nh-search input {
+  flex: 1; min-width: 0; border: 0; background: none; outline: none;
+  padding: 9px 0; font-size: 14px;
+}
+.nh-search input::placeholder { color: var(--ink-40); }
+.nh-loc {
+  border: 0; background: none; cursor: pointer; flex: none;
+  width: 29px; height: 29px; border-radius: 8px; display: grid; place-items: center;
+  color: var(--ink-40);
+  transition: background .2s var(--ease), color .2s var(--ease), transform .12s var(--ease);
+}
+.nh-loc:hover { background: var(--accent-50); color: var(--accent); }
+.nh-loc:active { transform: scale(.92); }
+.nh-loc svg { width: 16px; height: 16px; }
+.nh-loc.is-busy { animation: nh-spin 900ms linear infinite; }
+@keyframes nh-spin { to { transform: rotate(360deg); } }
+
+.nh-sugg {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+  background: #fff; border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 48px -18px rgba(13,43,69,.34);
+  padding: 5px; max-height: 320px; overflow-y: auto; z-index: 1000;
+  display: none;
+}
+.nh-sugg.is-open { display: block; }
+.nh-sugg-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 10px; border: 0; background: none; cursor: pointer;
+  border-radius: var(--r-sm); text-align: left;
+  transition: background .16s var(--ease);
+}
+.nh-sugg-item:hover, .nh-sugg-item[aria-selected="true"] { background: var(--accent-50); }
+.nh-sugg-ico { width: 15px; height: 15px; flex: none; color: var(--ink-40); }
+.nh-sugg-item[aria-selected="true"] .nh-sugg-ico { color: var(--accent); }
+.nh-sugg-label { flex: 1; min-width: 0; font-size: 14px; font-weight: 500; }
+.nh-sugg-label mark { background: none; color: var(--accent); font-weight: 700; }
+.nh-sugg-label small { display: block; font-size: 11.5px; font-weight: 400; color: var(--ink-40); }
+.nh-sugg-meta { font-size: 11.5px; color: var(--ink-40); flex: none; }
+.nh-sugg-empty { padding: 15px 12px; font-size: 13.5px; color: var(--ink-60); text-align: center; }
+.nh-sugg-sep { margin: 4px 6px; border-top: 1px solid var(--line-soft); }
+.nh-sugg-item.is-addr .nh-sugg-ico { color: var(--accent); }
+
+/* ---------- filters ---------- */
+.nh-sel { position: relative; display: inline-flex; }
+.nh-sel select {
+  appearance: none; -webkit-appearance: none;
+  border: 1px solid var(--line); background: var(--surface);
+  border-radius: 999px; padding: 7px 30px 7px 13px;
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: border-color .2s var(--ease), background .2s var(--ease);
+}
+.nh-sel select:hover { border-color: #cfd8e0; }
+.nh-sel::after {
+  content: ''; position: absolute; right: 12px; top: 50%; pointer-events: none;
+  width: 7px; height: 7px; margin-top: -5px;
+  border-right: 1.6px solid var(--ink-40); border-bottom: 1.6px solid var(--ink-40);
+  transform: rotate(45deg);
+}
+.nh-sel.is-set select { border-color: var(--accent); background: var(--accent-50); color: var(--accent-600); }
+.nh-sel.is-set::after { border-color: var(--accent-600); }
+.nh-sel select:disabled { opacity: .45; cursor: not-allowed; }
+
+.nh-reset {
+  border: 0; background: none; cursor: pointer;
+  font-size: 13px; font-weight: 500; color: var(--ink-60);
+  padding: 7px 11px; border-radius: 999px;
+  display: none; align-items: center; gap: 5px;
+  transition: color .2s var(--ease), background .2s var(--ease);
+}
+.nh-reset:hover { color: var(--ink); background: var(--line-soft); }
+.nh-reset:active { transform: scale(.97); }
+.nh-reset svg { width: 13px; height: 13px; }
+.nh-reset.is-on { display: inline-flex; }
+.nh-count { margin-left: auto; font-size: 13px; color: var(--ink-60); font-variant-numeric: tabular-nums; }
+.nh-count b { color: var(--ink); font-weight: 600; }
+
+/* ---------- body split ---------- */
+.nh-body { flex: 1; display: grid; grid-template-columns: 384px minmax(0,1fr); min-height: 0; }
+.nh-list { border-right: 1px solid var(--line); background: var(--surface); overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.nh-map-wrap { position: relative; min-height: 0; }
+.nh-map { position: absolute; inset: 0; }
+
+/* ---------- result cards ---------- */
+.nh-card {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  border: 0; border-bottom: 1px solid var(--line-soft); background: none;
+  padding: 15px 18px 16px;
+  transition: background .2s var(--ease);
+  animation: nh-rise .42s var(--ease) both;
+  animation-delay: calc(var(--i) * 26ms);
+}
+@keyframes nh-rise { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+.nh-card:hover { background: var(--canvas); }
+.nh-card:active { transform: translateY(1px); }
+.nh-card.is-active { background: var(--accent-50); box-shadow: inset 3px 0 0 var(--accent); }
+.nh-card-top { display: flex; align-items: baseline; gap: 9px; }
+.nh-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; transform: translateY(-1px); }
+.nh-card-name { font-size: 14.5px; font-weight: 600; letter-spacing: -.008em; line-height: 1.32; flex: 1; min-width: 0; }
+.nh-dist {
+  font-size: 11.5px; font-weight: 600; color: var(--accent-600);
+  background: var(--accent-50); padding: 2px 7px; border-radius: 999px;
+  flex: none; font-variant-numeric: tabular-nums;
+}
+.nh-card-type { font-size: 12px; color: var(--ink-60); margin: 3px 0 0 17px; }
+.nh-card-addr { font-size: 12.5px; color: var(--ink-40); margin: 5px 0 0 17px; line-height: 1.45; }
+.nh-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 9px 0 0 17px; }
+.nh-chip {
+  font-size: 11px; font-weight: 500; padding: 2.5px 8px;
+  border-radius: 999px; background: var(--line-soft); color: var(--ink-60);
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.nh-chip svg { width: 11px; height: 11px; }
+.nh-chip.is-restricted { background: #fdf0f3; color: #94304c; }
+
+/* ---------- list states ---------- */
+.nh-state { padding: 46px 30px; text-align: center; }
+.nh-state-ico { width: 46px; height: 46px; margin: 0 auto 15px; border-radius: 14px; background: var(--line-soft); display: grid; place-items: center; color: var(--ink-40); }
+.nh-state-ico svg { width: 22px; height: 22px; }
+.nh-state h3 { margin: 0 0 6px; font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.nh-state p { margin: 0 auto; font-size: 13.5px; color: var(--ink-60); line-height: 1.6; max-width: 32ch; }
+.nh-state .nh-btn { margin-top: 15px; }
+.nh-btn {
+  border: 0; background: var(--accent); color: #fff; cursor: pointer;
+  font-size: 13px; font-weight: 600; padding: 9px 17px; border-radius: 999px;
+  transition: background .2s var(--ease), transform .12s var(--ease);
+}
+.nh-btn:hover { background: var(--accent-600); }
+.nh-btn:active { transform: translateY(1px); }
+.nh-state.is-error .nh-state-ico { background: #fdf0f3; color: #b4455e; }
+
+.nh-skel { padding: 15px 18px 16px; border-bottom: 1px solid var(--line-soft); }
+.nh-skel-bar {
+  height: 10px; border-radius: 5px; margin-bottom: 8px;
+  background: linear-gradient(100deg, var(--line-soft) 28%, #e6ecf1 46%, var(--line-soft) 64%);
+  background-size: 220% 100%;
+  animation: nh-shimmer 1.5s linear infinite;
+}
+@keyframes nh-shimmer { from { background-position: 190% 0; } to { background-position: -60% 0; } }
+
+/* ---------- markers ---------- */
+.nh-pin { position: relative; }
+.nh-pin i {
+  position: absolute; left: 50%; top: 0; display: block;
+  width: 21px; height: 21px; margin-left: -10.5px;
+  border: 2.2px solid #fff; border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  box-shadow: 0 3px 7px -1px rgba(13,43,69,.42);
+  transition: transform .26s var(--ease);
+}
+.nh-pin.is-active i { transform: rotate(-45deg) scale(1.28); z-index: 5; }
+.nh-cluster { display: grid; place-items: center; border-radius: 50%; background: rgba(28,117,188,.24); transition: transform .2s var(--ease); }
+.nh-cluster:hover { transform: scale(1.06); }
+.nh-cluster span {
+  display: grid; place-items: center; border-radius: 50%;
+  width: 76%; height: 76%; background: var(--accent); color: #fff;
+  font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+  box-shadow: 0 2px 8px -1px rgba(13,43,69,.4);
+}
+/* "You are here" marker. Deliberately NOT the accent blue and NOT a circle —
+   at an urban address it lands under a cluster bubble of the same size and
+   colour, and a blue dot on a blue bubble reads as nothing at all. */
+.nh-here { position: relative; width: 34px; height: 42px; }
+.nh-here::before {                       /* pulsing ground ring */
+  content: ''; position: absolute; left: 50%; top: 27px;
+  width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%;
+  background: rgba(13,43,69,.22);
+  animation: nh-pulse 2.4s var(--ease) infinite;
+}
+.nh-here i {
+  position: absolute; left: 50%; top: 0; display: block;
+  width: 26px; height: 26px; margin-left: -13px;
+  background: var(--navy); border: 3px solid #fff;
+  border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+  box-shadow: 0 4px 12px -2px rgba(13,43,69,.6);
+}
+.nh-here i::after {                      /* white centre dot */
+  content: ''; position: absolute; left: 50%; top: 50%;
+  width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px;
+  background: #fff; border-radius: 50%;
+}
+@keyframes nh-pulse {
+  0%   { transform: scale(.7); opacity: .75; }
+  70%  { transform: scale(1.9); opacity: 0; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+.nh .leaflet-tooltip.nh-here-tip {
+  background: var(--navy); color: #fff; border: 0; border-radius: 7px;
+  font-size: 12px; font-weight: 600; padding: 4px 9px;
+  box-shadow: 0 6px 18px -6px rgba(13,43,69,.7);
+}
+.nh .leaflet-tooltip.nh-here-tip::before { border-top-color: var(--navy); }
+
+/* ---------- popup ---------- */
+.nh .leaflet-popup-content-wrapper { border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 0; }
+.nh .leaflet-popup-content { margin: 0; width: 292px !important; line-height: 1.5; }
+.nh .leaflet-popup-tip { box-shadow: var(--shadow); }
+.nh-pop { padding: 16px 17px 15px; }
+.nh-pop-cat { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 7px; }
+.nh-pop-name { font-size: 15.5px; font-weight: 600; letter-spacing: -.012em; line-height: 1.28; margin: 0 0 9px; color: var(--navy); }
+.nh-pop-rows { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; }
+.nh-pop-row { display: flex; gap: 9px; font-size: 12.8px; color: var(--ink-60); }
+.nh-pop-row svg { width: 14px; height: 14px; flex: none; margin-top: 2px; color: var(--ink-40); }
+.nh-pop-row a { color: var(--accent); text-decoration: none; word-break: break-word; }
+.nh-pop-row a:hover { text-decoration: underline; }
+.nh-pop-note { font-size: 12.3px; color: var(--ink-60); line-height: 1.55; padding-top: 11px; border-top: 1px solid var(--line-soft); margin-bottom: 11px; }
+.nh-pop-acts { display: flex; gap: 7px; }
+/* Leaflet ships `.leaflet-container a { color: #0078A8 }` — specificity (0,1,1),
+   which beats a single class and repaints these links dark blue on the blue
+   fill. Every rule that sets a link colour inside the map needs two classes to
+   outrank it. Do not "simplify" these back to one selector. */
+.nh .nh-pop-act {
+  flex: 1; text-align: center; text-decoration: none;
+  font-size: 12.5px; font-weight: 600; padding: 8px 10px; border-radius: var(--r-sm);
+  background: var(--accent); color: #fff;
+  transition: background .2s var(--ease), transform .12s var(--ease);
+}
+.nh .nh-pop-act:hover { background: var(--accent-600); color: #fff; }
+.nh .nh-pop-act:active { transform: translateY(1px); }
+.nh .nh-pop-act.is-ghost { background: var(--line-soft); color: var(--ink); }
+.nh .nh-pop-act.is-ghost:hover { background: var(--line); color: var(--ink); }
+.nh .nh-pop-src { display: block; margin-top: 9px; font-size: 11px; color: var(--ink-40); text-decoration: none; text-align: center; }
+.nh .nh-pop-src:hover { color: var(--accent); text-decoration: underline; }
+.nh .nh-pop-row a { color: var(--accent); }
+
+/* ---------- legend ---------- */
+.nh-legend {
+  position: absolute; left: 12px; bottom: 22px; z-index: 500;
+  background: rgba(255,255,255,.94); backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,.7);
+  border-radius: var(--r-md); padding: 10px 12px;
+  box-shadow: 0 12px 30px -14px rgba(13,43,69,.4);
+  max-width: 210px;
+}
+.nh-legend h4 { margin: 0 0 7px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-40); }
+.nh-legend ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.nh-legend li { display: flex; align-items: center; gap: 7px; font-size: 11.8px; color: var(--ink-60); }
+.nh-legend i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
+/* ---------- mobile ---------- */
+.nh-toggle {
+  display: none; position: absolute; left: 50%; bottom: 20px; z-index: 700;
+  transform: translateX(-50%);
+  border: 0; background: var(--navy); color: #fff; cursor: pointer;
+  font-size: 13px; font-weight: 600; padding: 11px 20px; border-radius: 999px;
+  box-shadow: 0 12px 28px -8px rgba(13,43,69,.55);
+  align-items: center; gap: 7px;
+}
+.nh-toggle:active { transform: translateX(-50%) scale(.96); }
+.nh-toggle svg { width: 15px; height: 15px; }
+
+@container (max-width: 880px) {
+  .nh-bar { padding: 10px 14px; gap: 7px; }
+  .nh-search { flex: 1 1 100%; max-width: none; }
+  .nh-count { width: 100%; margin: 2px 0 0; order: 9; }
+  .nh-body { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+  .nh-list { border-right: 0; }
+  .nh-toggle { display: inline-flex; }
+  .nh-body[data-view="map"] .nh-list { display: none; }
+  .nh-body[data-view="list"] .nh-map-wrap { display: none; }
+  .nh-legend { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nh *, .nh *::before, .nh *::after {
+    animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+html, body.nh-standalone { height: 100%; }
+body.nh-standalone { margin: 0; }
+body.nh-standalone > .nh { height: 100%; }
+</style>
+</head>
+
+<body class="nh-standalone">
+
+<svg class="sr" aria-hidden="true"><defs>
+  <g id="i-pin"><path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/></g>
+  <g id="i-search"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m16 16 4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
+  <g id="i-crosshair"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></g>
+  <g id="i-hash"><path d="M9 3 7 21M17 3l-2 18M3.5 8.5h17M2.5 15.5h17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></g>
+  <g id="i-home"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1v-9.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></g>
+  <g id="i-phone"><path d="M6.2 3.5h3l1.6 4-2 1.4a12 12 0 0 0 5.3 5.3l1.4-2 4 1.6v3a2 2 0 0 1-2.2 2A17 17 0 0 1 4.2 5.7a2 2 0 0 1 2-2.2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></g>
+  <g id="i-clock"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></g>
+  <g id="i-globe"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 12h17M12 3.5c4.5 5 4.5 12 0 17-4.5-5-4.5-12 0-17Z" fill="none" stroke="currentColor" stroke-width="1.7"/></g>
+  <g id="i-door"><path d="M14 3.5 6 5.4v13.2L14 20.5V3.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M14 5.5h4v13h-4" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="11.4" cy="12" r=".95" fill="currentColor"/></g>
+  <g id="i-bed"><path d="M3 18V7M3 12h18v6M3 12v6M21 18v-3.6a2.4 2.4 0 0 0-2.4-2.4H12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="7.4" cy="9.4" r="1.9" fill="none" stroke="currentColor" stroke-width="1.7"/></g>
+  <g id="i-user"><circle cx="12" cy="8.2" r="3.7" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></g>
+  <g id="i-close"><path d="m6 6 12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></g>
+  <g id="i-list"><path d="M8 6.5h12M8 12h12M8 17.5h12M4 6.5h.01M4 12h.01M4 17.5h.01" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></g>
+  <g id="i-map"><path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20V6.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 4v13.5M15 6.5V20" fill="none" stroke="currentColor" stroke-width="1.7"/></g>
+  <g id="i-empty"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m16 16 4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8.6 11h4.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
+  <g id="i-warn"><path d="M12 4.5 21 19.5H3L12 4.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 10v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="16.6" r="1" fill="currentColor"/></g>
+</defs></svg>
+
+<div class="nh">
+
+  <div class="nh-bar">
+    <div class="nh-search">
+      <label class="sr" for="nhQ">Search by address, neighborhood, town, or ZIP code</label>
+      <div class="nh-search-field">
+        <svg class="nh-search-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"/></svg>
+        <input id="nhQ" type="text" autocomplete="off" spellcheck="false"
+               placeholder="Address, neighborhood, town, or ZIP"
+               role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="nhSugg">
+        <button class="nh-loc" id="nhLoc" type="button" title="Use my location">
+          <span class="sr">Use my current location</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-crosshair"/></svg>
+        </button>
+      </div>
+      <div class="nh-sugg" id="nhSugg" role="listbox" aria-label="Location suggestions"></div>
+    </div>
+
+    <div class="nh-sel"><label class="sr" for="nhGroup">Category</label>
+      <select id="nhGroup"><option value="">All categories</option></select></div>
+    <div class="nh-sel"><label class="sr" for="nhType">Service type</label>
+      <select id="nhType" disabled><option value="">All service types</option></select></div>
+    <div class="nh-sel"><label class="sr" for="nhGender">Who needs help</label>
+      <select id="nhGender"><option value="">Anyone</option></select></div>
+    <div class="nh-sel"><label class="sr" for="nhAge">Age</label>
+      <select id="nhAge"><option value="">Any age</option></select></div>
+    <div class="nh-sel"><label class="sr" for="nhRadius">Distance</label>
+      <select id="nhRadius" disabled>
+        <option value="">Any distance</option>
+        <option value="2">Within 2 miles</option>
+        <option value="5" selected>Within 5 miles</option>
+        <option value="10">Within 10 miles</option>
+        <option value="25">Within 25 miles</option>
+      </select></div>
+    <button class="nh-reset" id="nhReset" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-close"/></svg>Clear
+    </button>
+    <div class="nh-count" id="nhCount" role="status" aria-live="polite"></div>
+  </div>
+
+  <div class="nh-body" id="nhBody" data-view="map">
+    <div class="nh-list" id="nhList"></div>
+    <div class="nh-map-wrap">
+      <div class="nh-map" id="nhMap"></div>
+      <div class="nh-legend" id="nhLegend" hidden><h4>Categories</h4><ul></ul></div>
+      <button class="nh-toggle" id="nhToggle" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-list"/></svg><span>List</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var CFG = window.NH_CONFIG;
+
+  var GROUP_COLORS = {
+    'Addiction & Recovery':                '#1c75bc',
+    'Healthcare':                          '#2a8c7a',
+    'Shelter & Housing':                   '#a83e5b',
+    'Food & Basic Needs':                  '#c2951c',
+    'Community Services':                  '#7a4e7e',
+    'Mental Health':                       '#5f9147',
+    'Medication Assisted Treatment (MAT)': '#8a6a42'
+  };
+  var colorFor = function (g) { return GROUP_COLORS[g] || '#5a6672'; };
+
+  // ------------------------------------------------------------------
+  // Boston neighborhoods are not postal cities — a South End address has
+  // city "Boston", so nothing named "South End" exists in the data and it
+  // can never appear as a suggestion. Map each neighborhood to its ZIPs and
+  // build the entry from those rows instead. Names that ARE postal cities
+  // (Dorchester, East Boston, Roxbury...) are listed too so the entry covers
+  // rows filed under either the neighborhood or "Boston" + ZIP.
+  // ------------------------------------------------------------------
+  var NEIGHBORHOODS = {
+    'South End':        ['02118'],
+    'Back Bay':         ['02116'],
+    'Beacon Hill':      ['02108', '02114'],
+    'North End':        ['02113'],
+    'Chinatown':        ['02111'],
+    'Downtown':         ['02109', '02110', '02201'],
+    'Fenway':           ['02115', '02215'],
+    'Mission Hill':     ['02120'],
+    'Roxbury':          ['02119'],
+    'Jamaica Plain':    ['02130'],
+    'Dorchester':       ['02121', '02122', '02124', '02125'],
+    'South Boston':     ['02127', '02210'],
+    'Charlestown':      ['02129'],
+    'East Boston':      ['02128'],
+    'Mattapan':         ['02126'],
+    'Roslindale':       ['02131'],
+    'West Roxbury':     ['02132'],
+    'Hyde Park':        ['02136'],
+    'Allston':          ['02134'],
+    'Brighton':         ['02135']
+  };
+
+  // ------------------------------------------------------------------
+  // Filters answer "who is looking for help", not "who is this program
+  // restricted to". Someone selecting Men must still see the 55 opioid
+  // treatment programs marked Everyone — an exact match hides them and
+  // returns nothing, which is the opposite of what the filter is for.
+  // Each key lists the gender_served values a person of that kind can use.
+  // ------------------------------------------------------------------
+  var GENDER_OPTS = [
+    { value: 'Men',              label: 'Serves men',                 serves: ['Everyone', 'Men'] },
+    { value: 'Women',            label: 'Serves women',               serves: ['Everyone', 'Women', 'Women & children'] },
+    { value: 'Women & children', label: 'Serves women with children', serves: ['Everyone', 'Women & children'] },
+    { value: 'LGBTQ+ focus',     label: 'LGBTQ+ focused',             serves: ['Everyone', 'LGBTQ+ focus'] }
+  ];
+  // Same logic for age: an adult can use an "All ages" program; a 60-year-old
+  // can use anything for adults. Blank always passes — see applyFilters.
+  var AGE_OPTS = [
+    { value: 'Youth <18',            label: 'Serves under 18',   serves: ['All ages', 'Youth <18'] },
+    { value: 'Transition age 18-24', label: 'Serves ages 18-24', serves: ['All ages', 'Transition age 18-24', 'Adults 18+'] },
+    { value: 'Adults 18+',           label: 'Serves adults 18+', serves: ['All ages', 'Adults 18+'] },
+    { value: 'Older adults 60+',     label: 'Serves adults 60+', serves: ['All ages', 'Adults 18+', 'Older adults 60+'] }
+  ];
+  var servesFor = function (opts, v) {
+    for (var i = 0; i < opts.length; i++) if (opts[i].value === v) return opts[i].serves;
+    return null;
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var el = {
+    q: $('nhQ'), sugg: $('nhSugg'), loc: $('nhLoc'),
+    group: $('nhGroup'), type: $('nhType'), gender: $('nhGender'),
+    age: $('nhAge'), radius: $('nhRadius'),
+    reset: $('nhReset'), count: $('nhCount'), list: $('nhList'),
+    body: $('nhBody'), legend: $('nhLegend'), toggle: $('nhToggle')
+  };
+
+  var ALL = [], PLACES = [], view = [];
+  var origin = null, activeId = null, markers = {};
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function icon(id, cls) {
+    return '<svg class="' + (cls || '') + '" viewBox="0 0 24 24" aria-hidden="true"><use href="#' + id + '"/></svg>';
+  }
+  function padZip(z) { return z ? String(z).trim().padStart(5, '0') : ''; }
+  function fold(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); }
+
+  function distMi(a, b, c, d) {
+    var R = 3958.8, p = Math.PI / 180;
+    var dLat = (c - a) * p, dLng = (d - b) * p;
+    var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(a * p) * Math.cos(c * p) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  }
+  function fmtMi(m) { return m < 10 ? m.toFixed(1) + ' mi' : Math.round(m) + ' mi'; }
+
+  function parseCSV(text) {
+    var rows = [], row = [], f = '', q = false;
+    for (var i = 0; i < text.length; i++) {
+      var c = text[i];
+      if (q) {
+        if (c === '"' && text[i + 1] === '"') { f += '"'; i++; }
+        else if (c === '"') { q = false; }
+        else { f += c; }
+      } else {
+        if (c === '"') { q = true; }
+        else if (c === ',') { row.push(f); f = ''; }
+        else if (c === '\n') { row.push(f); rows.push(row); row = []; f = ''; }
+        else if (c === '\r') { /* skip */ }
+        else { f += c; }
+      }
+    }
+    if (f.length || row.length) { row.push(f); rows.push(row); }
+    return rows;
+  }
+  function toObjects(rows) {
+    if (!rows.length) return [];
+    var h = rows[0].map(function (s) { return String(s).trim(); });
+    return rows.slice(1)
+      .filter(function (r) { return r.some(function (c) { return c && c.trim(); }); })
+      .map(function (r) {
+        var o = {};
+        h.forEach(function (k, i) { o[k] = (r[i] || '').trim(); });
+        return o;
+      });
+  }
+
+  function prepare(raw) {
+    return raw
+      .filter(function (r) { return (r.active || 'TRUE').toUpperCase() !== 'FALSE'; })
+      .map(function (r, i) {
+        var lat = parseFloat(r.lat), lng = parseFloat(r.lng);
+        if (!isFinite(lat) || !isFinite(lng)) return null;
+        var parts = String(r.category || '').split(' / ');
+        r._id = 'r' + i;
+        r._lat = lat; r._lng = lng;
+        r._group = (parts[0] || 'Other').trim();
+        r._type = (parts[1] || parts[0] || 'Resource').trim();
+        r._color = colorFor(r._group);
+        r._addr = [r.street, r.city, ((r.state || '') + ' ' + padZip(r.zip)).trim()]
+                    .filter(Boolean).join(', ');
+        r._search = fold([r.name, r.city, r._type, r._group, padZip(r.zip)].join(' '));
+        return r;
+      })
+      .filter(Boolean);
+  }
+
+  function buildPlaces(rows) {
+    var agg = {};
+    function add(label, kind, r) {
+      var k = kind + '|' + fold(label);
+      if (!agg[k]) agg[k] = { label: label, kind: kind, n: 0, lat: 0, lng: 0 };
+      agg[k].n++; agg[k].lat += r._lat; agg[k].lng += r._lng;
+    }
+    rows.forEach(function (r) {
+      if (r.city) add(r.city, 'town', r);
+      var z = padZip(r.zip);
+      // "00000" and other non-ZIPs would become a suggestion nobody wants
+      if (/^\d{5}$/.test(z) && z !== '00000') add(z, 'zip', r);
+    });
+
+    // Neighborhood entries, built from ZIP membership plus any row already
+    // filed under the neighborhood name.
+    Object.keys(NEIGHBORHOODS).forEach(function (hood) {
+      var zips = NEIGHBORHOODS[hood], hf = fold(hood);
+      rows.forEach(function (r) {
+        if (zips.indexOf(padZip(r.zip)) > -1 || fold(r.city) === hf) add(hood, 'hood', r);
+      });
+    });
+
+    var out = Object.keys(agg).map(function (k) {
+      var a = agg[k];
+      return { label: a.label, kind: a.kind, count: a.n, lat: a.lat / a.n, lng: a.lng / a.n, key: fold(a.label) };
+    });
+
+    // A neighborhood entry supersedes the town entry of the same name, so
+    // "Dorchester" doesn't appear twice with different counts.
+    var hoodKeys = {};
+    out.forEach(function (p) { if (p.kind === 'hood') hoodKeys[p.key] = 1; });
+    return out
+      .filter(function (p) { return !(p.kind === 'town' && hoodKeys[p.key]); })
+      .sort(function (x, y) { return y.count - x.count; });
+  }
+
+  // ---------- map ----------
+  var map = L.map('nhMap', { scrollWheelZoom: true, doubleClickZoom: false, zoomControl: false })
+             .setView(CFG.CENTER, CFG.ZOOM);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd', maxZoom: 19
+  }).addTo(map);
+
+  var cluster = L.markerClusterGroup({
+    showCoverageOnHover: false, maxClusterRadius: 52, spiderfyOnMaxZoom: true,
+    iconCreateFunction: function (c) {
+      var n = c.getChildCount();
+      var size = n < 10 ? 34 : n < 50 ? 40 : n < 200 ? 46 : 54;
+      return L.divIcon({
+        html: '<div class="nh-cluster" style="width:' + size + 'px;height:' + size + 'px"><span>' + n + '</span></div>',
+        className: '', iconSize: [size, size]
+      });
+    }
+  });
+  map.addLayer(cluster);
+  // Its own pane above markerPane (600) so a cluster bubble can never sit on
+  // top of the searched address.
+  map.createPane('nhOrigin');
+  map.getPane('nhOrigin').style.zIndex = 650;
+  map.getPane('nhOrigin').style.pointerEvents = 'none';
+  var originLayer = L.layerGroup().addTo(map);
+
+  function pinIcon(color, active) {
+    return L.divIcon({
+      className: '',
+      html: '<div class="nh-pin' + (active ? ' is-active' : '') + '"><i style="background:' + color + '"></i></div>',
+      iconSize: [21, 30], iconAnchor: [10.5, 30], popupAnchor: [0, -27]
+    });
+  }
+
+  function popupHTML(r) {
+    var dest = r._addr || (r._lat + ',' + r._lng);
+    var dir = 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(dest);
+    var rows = [];
+    if (r._addr)  rows.push('<div class="nh-pop-row">' + icon('i-pin') + '<span>' + esc(r._addr) + '</span></div>');
+    if (r.phone)  rows.push('<div class="nh-pop-row">' + icon('i-phone') + '<a href="tel:' + esc(r.phone.replace(/[^0-9+]/g, '')) + '">' + esc(r.phone) + '</a></div>');
+    if (r.hours)  rows.push('<div class="nh-pop-row">' + icon('i-clock') + '<span>' + esc(r.hours) + '</span></div>');
+    if (r.intake) rows.push('<div class="nh-pop-row">' + icon('i-door') + '<span>' + esc(r.intake) + '</span></div>');
+    if (r.beds)   rows.push('<div class="nh-pop-row">' + icon('i-bed') + '<span>' + esc(r.beds) + ' beds</span></div>');
+
+    var who = [];
+    if (r.gender_served) who.push(esc(r.gender_served));
+    if (r.age_served) who.push(esc(r.age_served));
+    if (who.length) rows.push('<div class="nh-pop-row">' + icon('i-user') + '<span>' + who.join(' &middot; ') +
+      (r.gender_note || r.age_note ? '<br><span style="color:var(--ink-40)">' + esc([r.gender_note, r.age_note].filter(Boolean).join('; ')) + '</span>' : '') +
+      '</span></div>');
+    if (r.website) rows.push('<div class="nh-pop-row">' + icon('i-globe') + '<a href="' + esc(r.website) + '" target="_blank" rel="noopener">Visit website</a></div>');
+
+    return '<div class="nh-pop">' +
+      '<div class="nh-pop-cat" style="color:' + r._color + '">' +
+        '<span style="width:7px;height:7px;border-radius:50%;background:' + r._color + '"></span>' + esc(r._type) +
+      '</div>' +
+      '<h3 class="nh-pop-name">' + esc(r.name) + '</h3>' +
+      (rows.length ? '<div class="nh-pop-rows">' + rows.join('') + '</div>' : '') +
+      (r.notes ? '<p class="nh-pop-note">' + esc(r.notes.slice(0, 240)) + (r.notes.length > 240 ? '&hellip;' : '') + '</p>' : '') +
+      '<div class="nh-pop-acts">' +
+        (r.phone ? '<a class="nh-pop-act is-ghost" href="tel:' + esc(r.phone.replace(/[^0-9+]/g, '')) + '">Call</a>' : '') +
+        '<a class="nh-pop-act" href="' + dir + '" target="_blank" rel="noopener">Directions</a>' +
+      '</div>' +
+      (r.source_url ? '<a class="nh-pop-src" href="' + esc(r.source_url) + '" target="_blank" rel="noopener">Source</a>' : '') +
+    '</div>';
+  }
+
+  // ---------- filtering ----------
+  function applyFilters() {
+    var group = el.group.value, type = el.type.value;
+    var gServes = servesFor(GENDER_OPTS, el.gender.value);
+    var aServes = servesFor(AGE_OPTS, el.age.value);
+    var radius = origin && el.radius.value ? parseFloat(el.radius.value) : null;
+
+    // The search box is a LOCATION box, not a name search. It used to also
+    // substring-match resource names, which meant typing an address emptied
+    // the list to "No resources match" before any lookup ran. Typing here
+    // never filters — it only ever sets an origin.
+    var out = ALL.filter(function (r) {
+      if (group && r._group !== group) return false;
+      if (type && r._type !== type) return false;
+      // A blank value means "no restriction stated" — it must pass every
+      // filter rather than be hidden. Never cost a resource its visibility
+      // because of a gap in the data.
+      if (gServes && r.gender_served && gServes.indexOf(r.gender_served) === -1) return false;
+      if (aServes && r.age_served && aServes.indexOf(r.age_served) === -1) return false;
+      return true;
+    });
+
+    if (origin) {
+      out.forEach(function (r) { r._d = distMi(origin.lat, origin.lng, r._lat, r._lng); });
+      if (radius) out = out.filter(function (r) { return r._d <= radius; });
+      out.sort(function (a, b) { return a._d - b._d; });
+    } else {
+      out.forEach(function (r) { r._d = null; });
+      out.sort(function (a, b) { return a.name.localeCompare(b.name); });
+    }
+    view = out;
+    render();
+  }
+
+  function render() {
+    renderCount(); renderMarkers(); renderList();
+    var dirty = el.group.value || el.type.value || el.gender.value || el.age.value || origin;
+    el.reset.classList.toggle('is-on', !!dirty);
+  }
+
+  function renderCount() {
+    var n = view.length;
+    var where = origin ? ' near ' + esc(origin.label) : '';
+    el.count.innerHTML = (n === ALL.length && !origin)
+      ? '<b>' + n.toLocaleString() + '</b> resources'
+      : '<b>' + n.toLocaleString() + '</b> of ' + ALL.length.toLocaleString() + where;
+  }
+
+  function renderMarkers() {
+    cluster.clearLayers();
+    markers = {};
+    cluster.addLayers(view.map(function (r) {
+      var m = L.marker([r._lat, r._lng], { icon: pinIcon(r._color, false), title: r.name });
+      m.bindPopup(popupHTML(r), { maxWidth: 300 });
+      m.on('popupopen', function () { setActive(r._id, false); });
+      markers[r._id] = m;
+      return m;
+    }));
+  }
+
+  function fitToResults() {
+    if (origin) {
+      var pts = view.slice(0, 60).map(function (r) { return [r._lat, r._lng]; });
+      pts.push([origin.lat, origin.lng]);
+      map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: 14 });
+    } else if (view.length) {
+      map.fitBounds(L.latLngBounds(view.map(function (r) { return [r._lat, r._lng]; })), { padding: [40, 40] });
+    } else {
+      map.setView(CFG.CENTER, CFG.ZOOM);
+    }
+  }
+
+  function renderList() {
+    if (!view.length) {
+      el.list.innerHTML =
+        '<div class="nh-state">' +
+          '<div class="nh-state-ico">' + icon('i-empty') + '</div>' +
+          '<h3>No resources match</h3>' +
+          '<p>Try a wider distance, or clear a filter to see more of the directory.</p>' +
+          '<button class="nh-btn" type="button" data-act="reset">Clear filters</button>' +
+        '</div>';
+      return;
+    }
+    var cap = 300;
+    var html = view.slice(0, cap).map(function (r, i) {
+      var chips = [];
+      if (r.gender_served && r.gender_served !== 'Everyone') {
+        chips.push('<span class="nh-chip is-restricted">' + icon('i-user') + esc(r.gender_served) + '</span>');
+      }
+      if (r.age_served) chips.push('<span class="nh-chip">' + esc(r.age_served) + '</span>');
+      if (r.beds) chips.push('<span class="nh-chip">' + icon('i-bed') + esc(r.beds) + ' beds</span>');
+
+      return '<button class="nh-card' + (r._id === activeId ? ' is-active' : '') + '" type="button" ' +
+                'data-id="' + r._id + '" style="--i:' + Math.min(i, 24) + '">' +
+        '<span class="nh-card-top">' +
+          '<span class="nh-dot" style="background:' + r._color + '"></span>' +
+          '<span class="nh-card-name">' + esc(r.name) + '</span>' +
+          (r._d != null ? '<span class="nh-dist">' + fmtMi(r._d) + '</span>' : '') +
+        '</span>' +
+        '<span class="nh-card-type">' + esc(r._type) + '</span>' +
+        (r._addr ? '<span class="nh-card-addr">' + esc(r._addr) + '</span>' : '') +
+        (chips.length ? '<span class="nh-chips">' + chips.join('') + '</span>' : '') +
+      '</button>';
+    }).join('');
+
+    if (view.length > cap) {
+      html += '<div class="nh-state" style="padding:22px 20px"><p>Showing the closest ' + cap +
+              ' of ' + view.length.toLocaleString() + '. Narrow the distance or add a filter to see the rest.</p></div>';
+    }
+    el.list.innerHTML = html;
+  }
+
+  function byId(id) { for (var i = 0; i < ALL.length; i++) if (ALL[i]._id === id) return ALL[i]; return null; }
+  function setActive(id, pan) {
+    var prev = activeId ? byId(activeId) : null;
+    if (prev && markers[activeId]) markers[activeId].setIcon(pinIcon(prev._color, false));
+    activeId = id;
+    var r = byId(id);
+    if (!r) return;
+    if (markers[id]) markers[id].setIcon(pinIcon(r._color, true));
+    el.list.querySelectorAll('.nh-card').forEach(function (c) {
+      c.classList.toggle('is-active', c.dataset.id === id);
+    });
+    if (pan && markers[id]) cluster.zoomToShowLayer(markers[id], function () { markers[id].openPopup(); });
+  }
+
+  // ---------- suggestions ----------
+  var suggList = [], suggIdx = -1;
+
+  // A street address is worth geocoding. So is any place we don't carry —
+  // a neighborhood outside the table, a landmark, a town with no resources.
+  // Offer the lookup whenever the text isn't already an exact local match.
+  function offerLookup(q, items) {
+    var t = q.trim();
+    if (t.length < 4 || /^\d{5}$/.test(t)) return false;
+    var f = fold(t);
+    return !items.some(function (p) { return p.key === f; });
+  }
+
+  function buildSuggestions(q) {
+    var items = searchPlaces(q);
+    if (offerLookup(q, items)) {
+      items = items.slice(0, 5);
+      items.push({ kind: 'address', label: q.trim() });
+    }
+    return items;
+  }
+
+  function openSugg(items) {
+    suggList = items; suggIdx = -1;
+    if (!items.length) {
+      el.sugg.innerHTML = '<div class="nh-sugg-empty">No town or ZIP matches that.<br>Type a full street address to search by address.</div>';
+    } else {
+      var qf = fold(el.q.value);
+      el.sugg.innerHTML = items.map(function (p, i) {
+        if (p.kind === 'address') {
+          return '<div class="nh-sugg-sep"></div>' +
+            '<button class="nh-sugg-item is-addr" type="button" role="option" aria-selected="false" data-i="' + i + '">' +
+            icon('i-home', 'nh-sugg-ico') +
+            '<span class="nh-sugg-label">Look up this address or place<small>' + esc(p.label) + '</small></span>' +
+          '</button>';
+        }
+        var lbl = esc(p.label), pos = fold(p.label).indexOf(qf);
+        if (qf && pos > -1) {
+          lbl = esc(p.label.slice(0, pos)) + '<mark>' + esc(p.label.slice(pos, pos + qf.length)) +
+                '</mark>' + esc(p.label.slice(pos + qf.length));
+        }
+        return '<button class="nh-sugg-item" type="button" role="option" aria-selected="false" data-i="' + i + '">' +
+          icon(p.kind === 'zip' ? 'i-hash' : 'i-pin', 'nh-sugg-ico') +
+          '<span class="nh-sugg-label">' + lbl + '</span>' +
+          '<span class="nh-sugg-meta">' + p.count + '</span>' +
+        '</button>';
+      }).join('');
+    }
+    el.sugg.classList.add('is-open');
+    el.q.setAttribute('aria-expanded', 'true');
+  }
+  function closeSugg() {
+    el.sugg.classList.remove('is-open');
+    el.q.setAttribute('aria-expanded', 'false');
+    suggIdx = -1;
+  }
+  function highlight(i) {
+    var opts = el.sugg.querySelectorAll('.nh-sugg-item');
+    if (!opts.length) return;
+    suggIdx = (i + opts.length) % opts.length;
+    opts.forEach(function (o, n) { o.setAttribute('aria-selected', n === suggIdx ? 'true' : 'false'); });
+    opts[suggIdx].scrollIntoView({ block: 'nearest' });
+  }
+
+  function searchPlaces(q) {
+    var f = fold(q);
+    if (!f) return PLACES.slice(0, 8);
+    var starts = [], contains = [];
+    for (var i = 0; i < PLACES.length; i++) {
+      var p = PLACES[i], at = p.key.indexOf(f);
+      if (at === 0) starts.push(p);
+      else if (at > 0) contains.push(p);
+      if (starts.length >= 8) break;
+    }
+    return starts.concat(contains).slice(0, 8);
+  }
+
+  function pick(p) {
+    if (p.kind === 'address') { geocode(p.label); return; }
+    setOrigin(p.lat, p.lng, p.label, p.label);
+  }
+
+  function setOrigin(lat, lng, label, inputText) {
+    origin = { lat: lat, lng: lng, label: label };
+    if (inputText != null) el.q.value = inputText;
+    closeSugg();
+    el.radius.disabled = false;
+    if (!el.radius.value) el.radius.value = '5';
+    markSet();
+    drawOrigin();
+    applyFilters();
+    fitToResults();
+  }
+
+  // Address lookup, bounded to Massachusetts. Only runs when the user picks
+  // "Use this address" or presses Enter — never per keystroke, which keeps
+  // this inside the Nominatim usage policy.
+  var geoBusy = false;
+  function geocode(q) {
+    if (geoBusy) return;
+    geoBusy = true;
+    el.loc.classList.add('is-busy');
+    el.count.innerHTML = 'Looking up that address…';
+    closeSugg();
+
+    var url = CFG.GEOCODE_URL + '?format=json&limit=1&countrycodes=us&addressdetails=1' +
+              '&bounded=1&viewbox=' + encodeURIComponent(CFG.VIEWBOX) +
+              '&q=' + encodeURIComponent(q);
+
+    fetch(url, { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { if (!r.ok) throw new Error('lookup failed'); return r.json(); })
+      .then(function (j) {
+        geoBusy = false;
+        el.loc.classList.remove('is-busy');
+        if (!j || !j.length) { lookupFailed(q); return; }
+        var hit = j[0];
+        var a = hit.address || {};
+        var short = [a.house_number, a.road].filter(Boolean).join(' ') ||
+                    (hit.display_name || q).split(',')[0];
+        var town = a.city || a.town || a.village || a.suburb || a.county || '';
+        var resolved = short + (town ? ', ' + town : '');
+        // Put the RESOLVED address in the box, not the raw typed text. It shows
+        // what actually matched, and keeps el.q.value === origin.label so the
+        // input handler's "user edited it" check doesn't clear the pin.
+        setOrigin(parseFloat(hit.lat), parseFloat(hit.lon), resolved, resolved);
+      })
+      .catch(function () {
+        geoBusy = false;
+        el.loc.classList.remove('is-busy');
+        lookupFailed(q, true);
+      });
+  }
+
+  // A misspelled street ("washignton") returns nothing from the geocoder, but
+  // the query usually still carries a ZIP or a town we already know. Use that
+  // rather than dead-ending the user on an empty map.
+  function lookupFailed(q, offline) {
+    var zip = (q.match(/\b\d{5}\b/) || [])[0];
+    var hit = zip && PLACES.filter(function (p) { return p.kind === 'zip' && p.label === zip; })[0];
+    if (!hit) {
+      var words = fold(q).replace(/\b\d+\b/g, ' ').split(/\s+/).filter(function (w) { return w.length > 3; });
+      for (var i = words.length - 1; i >= 0 && !hit; i--) {
+        hit = PLACES.filter(function (p) {
+          return (p.kind === 'town' || p.kind === 'hood') && p.key === words[i];
+        })[0];
+      }
+    }
+    if (hit) {
+      setOrigin(hit.lat, hit.lng, hit.label, el.q.value);
+      el.count.innerHTML = '<b>' + view.length.toLocaleString() + '</b> near ' + esc(hit.label) +
+                           ' &mdash; exact address not found, showing the area';
+      return;
+    }
+    el.list.innerHTML =
+      '<div class="nh-state is-error">' +
+        '<div class="nh-state-ico">' + icon('i-warn') + '</div>' +
+        '<h3>' + (offline ? 'Address lookup unavailable' : 'Address not found') + '</h3>' +
+        '<p>' + (offline
+          ? 'The lookup service did not respond. Search by town, neighborhood, or ZIP instead.'
+          : 'Check the spelling, or search by town, neighborhood, or ZIP code instead.') + '</p>' +
+        '<button class="nh-btn" type="button" data-act="reset">Show all resources</button>' +
+      '</div>';
+    el.count.innerHTML = '<b>' + (offline ? 'Lookup unavailable' : 'Not found') + '</b>';
+  }
+
+  function drawOrigin() {
+    originLayer.clearLayers();
+    if (!origin) return;
+    L.marker([origin.lat, origin.lng], {
+      icon: L.divIcon({
+        className: '',
+        html: '<div class="nh-here"><i></i></div>',
+        iconSize: [34, 42], iconAnchor: [17, 27]
+      }),
+      pane: 'nhOrigin', interactive: false, zIndexOffset: 1000
+    }).addTo(originLayer)
+      .bindTooltip(origin.label, {
+        direction: 'top', offset: [0, -28], permanent: true,
+        className: 'nh-here-tip', pane: 'nhOrigin'
+      });
+  }
+  function clearOrigin() { origin = null; originLayer.clearLayers(); el.radius.disabled = true; }
+
+  // ---------- events ----------
+  el.q.addEventListener('input', function () {
+    if (origin && el.q.value !== origin.label) clearOrigin();
+    openSugg(buildSuggestions(el.q.value));
+    applyFilters();
+  });
+  el.q.addEventListener('focus', function () { openSugg(buildSuggestions(el.q.value)); });
+  el.q.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); highlight(suggIdx + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); highlight(suggIdx - 1); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (suggIdx > -1 && suggList[suggIdx]) pick(suggList[suggIdx]);
+      else if (suggList.length && suggList[0].kind !== 'address') pick(suggList[0]);
+      else if (el.q.value.trim()) geocode(el.q.value.trim());
+    } else if (e.key === 'Escape') { closeSugg(); el.q.blur(); }
+  });
+  el.sugg.addEventListener('mousedown', function (e) {
+    var b = e.target.closest('.nh-sugg-item');
+    if (b) { e.preventDefault(); pick(suggList[+b.dataset.i]); }
+  });
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.nh-search')) closeSugg();
+  });
+
+  el.loc.addEventListener('click', function () {
+    if (!navigator.geolocation) {
+      el.count.innerHTML = '<b>Location not supported</b> — search a town or ZIP instead';
+      return;
+    }
+    el.loc.classList.add('is-busy');
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      el.loc.classList.remove('is-busy');
+      setOrigin(pos.coords.latitude, pos.coords.longitude, 'your location', 'My location');
+    }, function () {
+      el.loc.classList.remove('is-busy');
+      el.count.innerHTML = '<b>Location unavailable</b> — search a town or ZIP instead';
+    }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
+  });
+
+  el.group.addEventListener('change', function () { fillTypes(el.group.value); markSet(); applyFilters(); });
+  [el.type, el.gender, el.age, el.radius].forEach(function (s) {
+    s.addEventListener('change', function () { markSet(); applyFilters(); if (origin) fitToResults(); });
+  });
+  function markSet() {
+    [el.group, el.type, el.gender, el.age, el.radius].forEach(function (s) {
+      s.parentNode.classList.toggle('is-set', !!s.value && !s.disabled);
+    });
+  }
+
+  el.reset.addEventListener('click', doReset);
+  function doReset() {
+    el.group.value = ''; el.gender.value = ''; el.age.value = '';
+    fillTypes(''); el.q.value = ''; el.radius.value = '5';
+    clearOrigin(); markSet(); closeSugg(); applyFilters(); fitToResults();
+  }
+
+  el.list.addEventListener('click', function (e) {
+    if (e.target.closest('[data-act="reset"]')) { doReset(); return; }
+    var card = e.target.closest('.nh-card');
+    if (!card) return;
+    setActive(card.dataset.id, true);
+    if (el.body.dataset.view === 'list') setView('map');
+  });
+
+  el.toggle.addEventListener('click', function () { setView(el.body.dataset.view === 'map' ? 'list' : 'map'); });
+  function setView(v) {
+    el.body.dataset.view = v;
+    el.toggle.querySelector('span').textContent = v === 'map' ? 'List' : 'Map';
+    el.toggle.querySelector('use').setAttribute('href', v === 'map' ? '#i-list' : '#i-map');
+    if (v === 'map') setTimeout(function () { map.invalidateSize(); }, 60);
+  }
+
+  // ---------- selects ----------
+  function fillSelect(sel, entries) {
+    var first = sel.options[0];
+    sel.innerHTML = '';
+    sel.appendChild(first);
+    entries.forEach(function (e) {
+      var o = document.createElement('option');
+      o.value = e.value; o.textContent = e.label;
+      sel.appendChild(o);
+    });
+    sel.value = '';
+  }
+  function fillTypes(group) {
+    var types = [];
+    if (group) {
+      var seen = {};
+      ALL.forEach(function (r) {
+        if (r._group === group && !seen[r._type]) { seen[r._type] = 1; types.push(r._type); }
+      });
+      types.sort();
+    }
+    fillSelect(el.type, types.map(function (t) { return { value: t, label: t }; }));
+    el.type.disabled = types.length < 2;
+  }
+
+  function buildLegend() {
+    var seen = {};
+    ALL.forEach(function (r) { seen[r._group] = (seen[r._group] || 0) + 1; });
+    el.legend.querySelector('ul').innerHTML = Object.keys(seen)
+      .sort(function (a, b) { return seen[b] - seen[a]; })
+      .map(function (g) { return '<li><i style="background:' + colorFor(g) + '"></i>' + esc(g) + '</li>'; })
+      .join('');
+    el.legend.hidden = false;
+  }
+
+  // ---------- states ----------
+  function showSkeleton() {
+    var s = '';
+    for (var i = 0; i < 7; i++) {
+      s += '<div class="nh-skel">' +
+             '<div class="nh-skel-bar" style="width:' + (58 + (i * 7) % 30) + '%"></div>' +
+             '<div class="nh-skel-bar" style="width:38%;height:8px"></div>' +
+             '<div class="nh-skel-bar" style="width:' + (66 + (i * 11) % 24) + '%;height:8px"></div>' +
+           '</div>';
+    }
+    el.list.innerHTML = s;
+    el.count.textContent = 'Loading resources…';
+  }
+  function showError(msg) {
+    el.list.innerHTML =
+      '<div class="nh-state is-error">' +
+        '<div class="nh-state-ico">' + icon('i-warn') + '</div>' +
+        '<h3>Could not load the directory</h3>' +
+        '<p>' + esc(msg) + '</p>' +
+        '<button class="nh-btn" type="button" data-act="retry">Try again</button>' +
+      '</div>';
+    el.count.textContent = '';
+    el.list.querySelector('[data-act="retry"]').addEventListener('click', boot);
+  }
+
+  // ---------- boot ----------
+  function boot() {
+    showSkeleton();
+    fetch(CFG.SHEET_URL, { cache: 'no-cache' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('The data source returned ' + res.status + '.');
+        return res.text();
+      })
+      .then(function (text) {
+        ALL = prepare(toObjects(parseCSV(text)));
+        if (!ALL.length) throw new Error('The sheet loaded but has no rows with coordinates.');
+        PLACES = buildPlaces(ALL);
+
+        var groups = Object.keys(GROUP_COLORS).filter(function (g) {
+          return ALL.some(function (r) { return r._group === g; });
+        });
+        ALL.forEach(function (r) { if (groups.indexOf(r._group) === -1) groups.push(r._group); });
+        fillSelect(el.group, groups.map(function (g) { return { value: g, label: g }; }));
+
+        // Only offer a who/age option the data can actually satisfy.
+        fillSelect(el.gender, GENDER_OPTS.filter(function (o) {
+          return ALL.some(function (r) { return o.serves.indexOf(r.gender_served) > -1; });
+        }));
+        fillSelect(el.age, AGE_OPTS.filter(function (o) {
+          return ALL.some(function (r) { return o.serves.indexOf(r.age_served) > -1; });
+        }));
+
+        buildLegend();
+        applyFilters();
+        fitToResults();
+      })
+      .catch(function (err) { showError(err.message || 'Unknown error.'); });
+  }
+
+  window.addEventListener('resize', function () { map.invalidateSize(); });
+  boot();
+})();
+</script>
+</body>
+</html>
