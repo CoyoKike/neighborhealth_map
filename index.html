@@ -22,7 +22,10 @@ window.NH_CONFIG = {
   // Address lookup. Bounded to Massachusetts so a bare street name can't
   // land in another state. Only called when the user submits an address.
   GEOCODE_URL: 'https://nominatim.openstreetmap.org/search',
-  VIEWBOX:     '-73.55,42.90,-69.85,41.20'
+  VIEWBOX:     '-73.55,42.90,-69.85,41.20',
+  // Apps Script web-app URL that receives "list your organization" submissions.
+  // Leave blank and the button hides itself — see apps-script/README.md.
+  SUBMIT_URL:  ''
 };
 </script>
 
@@ -176,6 +179,62 @@ window.NH_CONFIG = {
 .nh-reset.is-on { display: inline-flex; }
 .nh-count { margin-left: auto; font-size: 13px; color: var(--ink-60); font-variant-numeric: tabular-nums; }
 .nh-count b { color: var(--ink); font-weight: 600; }
+
+/* ---------- "list your organization" ---------- */
+.nh-add {
+  display: none; align-items: center; gap: 6px;
+  border: 1px solid var(--accent); background: none; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--accent);
+  padding: 7px 13px; border-radius: 999px;
+  transition: background .2s var(--ease), color .2s var(--ease);
+}
+.nh-add.is-on { display: inline-flex; }
+.nh-add:hover { background: var(--accent); color: #fff; }
+.nh-add svg { width: 13px; height: 13px; }
+
+.nh-modal { position: fixed; inset: 0; z-index: 1000; display: none; }
+.nh-modal.is-open { display: grid; place-items: center; }
+.nh-modal-veil { position: absolute; inset: 0; background: rgba(13,43,69,.44); }
+.nh-modal-card {
+  position: relative; width: min(580px, calc(100% - 28px));
+  max-height: calc(100% - 40px); overflow-y: auto;
+  background: var(--surface); border-radius: 16px;
+  padding: 24px 26px 22px;
+  box-shadow: 0 30px 64px -22px rgba(13,43,69,.55);
+}
+.nh-modal-card h3 { margin: 0 0 4px; font-size: 18px; color: var(--navy); }
+.nh-modal-card > p { margin: 0 0 18px; font-size: 13px; line-height: 1.55; color: var(--ink-60); }
+.nh-modal-x {
+  position: absolute; top: 14px; right: 14px; width: 30px; height: 30px;
+  border: 0; border-radius: 50%; background: var(--line-soft); color: var(--ink-60);
+  cursor: pointer; display: grid; place-items: center;
+}
+.nh-modal-x svg { width: 15px; height: 15px; }
+.nh-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+.nh-f { display: grid; gap: 5px; }
+.nh-f.is-wide { grid-column: 1 / -1; }
+.nh-f label { font-size: 11.5px; font-weight: 600; color: var(--ink-60); }
+.nh-f label span { color: #b4455e; }
+.nh-f input, .nh-f select, .nh-f textarea {
+  font: inherit; font-size: 13.5px; color: var(--ink);
+  border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px;
+  background: var(--surface); width: 100%; box-sizing: border-box;
+}
+.nh-f textarea { resize: vertical; min-height: 68px; }
+.nh-f input:focus, .nh-f select:focus, .nh-f textarea:focus {
+  outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-50);
+}
+.nh-form-foot {
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 12px;
+  margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--line-soft);
+}
+.nh-form-note { font-size: 11.8px; color: var(--ink-40); line-height: 1.45; }
+.nh-form button[type=submit] { margin-left: auto; flex: none; }
+.nh-form button[disabled] { opacity: .55; cursor: default; }
+.nh-done { text-align: center; padding: 22px 6px 8px; }
+.nh-done h3 { margin: 0 0 8px; }
+.nh-done p { margin: 0 0 18px; font-size: 13.5px; line-height: 1.6; color: var(--ink-60); }
+@media (max-width: 520px) { .nh-form { grid-template-columns: 1fr; } }
 
 /* ---------- body split ---------- */
 .nh-body { flex: 1; display: grid; grid-template-columns: 384px minmax(0,1fr); min-height: 0; }
@@ -392,6 +451,8 @@ body.nh-standalone > .nh { height: 100%; }
   <g id="i-close"><path d="m6 6 12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></g>
   <g id="i-list"><path d="M8 6.5h12M8 12h12M8 17.5h12M4 6.5h.01M4 12h.01M4 17.5h.01" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></g>
   <g id="i-chev"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></g>
+  <g id="i-plus"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></g>
+  <g id="i-check"><path d="m5 13 4.5 4.5L19 7" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></g>
   <g id="i-map"><path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20V6.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 4v13.5M15 6.5V20" fill="none" stroke="currentColor" stroke-width="1.7"/></g>
   <g id="i-empty"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m16 16 4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8.6 11h4.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
   <g id="i-warn"><path d="M12 4.5 21 19.5H3L12 4.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 10v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="16.6" r="1" fill="currentColor"/></g>
@@ -435,6 +496,9 @@ body.nh-standalone > .nh { height: 100%; }
       <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-close"/></svg>Clear
     </button>
     <div class="nh-count" id="nhCount" role="status" aria-live="polite"></div>
+    <button class="nh-add" id="nhAdd" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus"/></svg>List your organization
+    </button>
   </div>
 
   <div class="nh-body" id="nhBody" data-view="map">
@@ -448,6 +512,115 @@ body.nh-standalone > .nh { height: 100%; }
       <span>Show list</span>
       <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chev"/></svg>
     </button>
+  </div>
+
+  <div class="nh-modal" id="nhModal" role="dialog" aria-modal="true" aria-labelledby="nhModalTitle">
+    <div class="nh-modal-veil" data-act="close"></div>
+    <div class="nh-modal-card">
+      <button class="nh-modal-x" type="button" data-act="close" aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-close"/></svg>
+      </button>
+
+      <div id="nhFormWrap">
+        <h3 id="nhModalTitle">List your organization</h3>
+        <p>Tell us about the service and we'll review it before it appears on the map.
+           Fields marked <span style="color:#b4455e">*</span> are required.</p>
+
+        <form class="nh-form" id="nhForm" novalidate>
+          <div class="nh-f is-wide">
+            <label for="fName">Organization or program name <span>*</span></label>
+            <input id="fName" name="name" type="text" required autocomplete="organization">
+          </div>
+
+          <div class="nh-f">
+            <label for="fGroup">Category <span>*</span></label>
+            <select id="fGroup" name="group" required><option value="">Choose one</option></select>
+          </div>
+          <div class="nh-f">
+            <label for="fType">Service type <span>*</span></label>
+            <input id="fType" name="type" type="text" required placeholder="e.g. Food Pantry">
+          </div>
+
+          <div class="nh-f is-wide">
+            <label for="fStreet">Street address <span>*</span></label>
+            <input id="fStreet" name="street" type="text" required autocomplete="street-address">
+          </div>
+
+          <div class="nh-f">
+            <label for="fCity">City / town <span>*</span></label>
+            <input id="fCity" name="city" type="text" required autocomplete="address-level2">
+          </div>
+          <div class="nh-f">
+            <label for="fZip">ZIP code</label>
+            <input id="fZip" name="zip" type="text" inputmode="numeric" maxlength="5" autocomplete="postal-code">
+          </div>
+
+          <div class="nh-f">
+            <label for="fPhone">Phone</label>
+            <input id="fPhone" name="phone" type="tel" autocomplete="tel">
+          </div>
+          <div class="nh-f">
+            <label for="fWebsite">Website</label>
+            <input id="fWebsite" name="website" type="url" placeholder="https://">
+          </div>
+
+          <div class="nh-f is-wide">
+            <label for="fHours">Hours</label>
+            <input id="fHours" name="hours" type="text" placeholder="e.g. Mon-Fri 9am-5pm">
+          </div>
+
+          <div class="nh-f">
+            <label for="fGender">Who it serves</label>
+            <select id="fGender" name="gender_served">
+              <option value="Everyone">Everyone</option>
+              <option value="Men">Men</option>
+              <option value="Women">Women</option>
+              <option value="Women &amp; children">Women with children</option>
+              <option value="LGBTQ+ focus">LGBTQ+ focused</option>
+            </select>
+          </div>
+          <div class="nh-f">
+            <label for="fAge">Ages served</label>
+            <select id="fAge" name="age_served">
+              <option value="">Not specified</option>
+              <option value="All ages">All ages</option>
+              <option value="Youth &lt;18">Under 18</option>
+              <option value="Transition age 18-24">18-24</option>
+              <option value="Adults 18+">Adults 18+</option>
+              <option value="Older adults 60+">Older adults 60+</option>
+            </select>
+          </div>
+
+          <div class="nh-f is-wide">
+            <label for="fNotes">What the program does</label>
+            <textarea id="fNotes" name="notes" maxlength="600"
+              placeholder="A sentence or two: what you offer, who it's for, how to get in."></textarea>
+          </div>
+
+          <div class="nh-f">
+            <label for="fFrom">Your name <span>*</span></label>
+            <input id="fFrom" name="submitter_name" type="text" required autocomplete="name">
+          </div>
+          <div class="nh-f">
+            <label for="fEmail">Your email <span>*</span></label>
+            <input id="fEmail" name="submitter_email" type="email" required autocomplete="email">
+          </div>
+
+          <div class="nh-form-foot">
+            <span class="nh-form-note" id="nhFormNote">We may contact you to confirm details.</span>
+            <button class="nh-btn" type="submit" id="nhSubmit">Send for review</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="nh-done" id="nhDone" hidden>
+        <div class="nh-state-ico" style="margin:0 auto 14px"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check"/></svg></div>
+        <h3>Thanks — it's in the queue</h3>
+        <p>We'll review the details and add it to the map. If anything needs
+           clarifying we'll email you.</p>
+        <button class="nh-btn" type="button" data-act="close">Close</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -540,7 +713,10 @@ body.nh-standalone > .nh { height: 100%; }
     group: $('nhGroup'), type: $('nhType'), gender: $('nhGender'),
     age: $('nhAge'), radius: $('nhRadius'),
     reset: $('nhReset'), count: $('nhCount'), list: $('nhList'),
-    body: $('nhBody'), legend: $('nhLegend'), toggle: $('nhToggle')
+    body: $('nhBody'), legend: $('nhLegend'), toggle: $('nhToggle'),
+    add: $('nhAdd'), modal: $('nhModal'), form: $('nhForm'),
+    formWrap: $('nhFormWrap'), formNote: $('nhFormNote'),
+    done: $('nhDone'), submit: $('nhSubmit')
   };
 
   var ALL = [], PLACES = [], view = [];
@@ -1113,6 +1289,95 @@ body.nh-standalone > .nh { height: 100%; }
     el.toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     el.toggle.querySelector('span').textContent = open ? 'Hide list' : 'Show list';
     setTimeout(function () { map.invalidateSize(); }, 240);
+  });
+
+  // ------------------------------------------------------------------
+  // "List your organization"
+  //
+  // Posts to an Apps Script web app, which queues the row and emails a
+  // reviewer an approve link. Apps Script answers a cross-origin POST with a
+  // redirect the browser will not expose to us, so this is send-and-trust:
+  // a text/plain body (no preflight) and an optimistic confirmation. The
+  // button stays hidden until CFG.SUBMIT_URL is filled in.
+  // ------------------------------------------------------------------
+  var REQUIRED = ['name', 'group', 'type', 'street', 'city', 'submitter_name', 'submitter_email'];
+
+  if (CFG.SUBMIT_URL) el.add.classList.add('is-on');
+
+  function formField(k) { return el.form.elements[k]; }
+
+  function openForm() {
+    if (!el.form.dataset.ready) {
+      Object.keys(GROUP_COLORS).forEach(function (g) {
+        var o = document.createElement('option');
+        o.value = g; o.textContent = g;
+        formField('group').appendChild(o);
+      });
+      el.form.dataset.ready = '1';
+    }
+    el.modal.classList.add('is-open');
+    setTimeout(function () { formField('name').focus(); }, 40);
+  }
+
+  function closeForm() {
+    el.modal.classList.remove('is-open');
+    el.formWrap.hidden = false;
+    el.done.hidden = true;
+    el.form.reset();
+    el.submit.disabled = false;
+    el.submit.textContent = 'Send for review';
+    resetNote();
+  }
+
+  function resetNote() {
+    el.formNote.textContent = 'We may contact you to confirm details.';
+    el.formNote.style.color = '';
+  }
+  function warn(msg) {
+    el.formNote.textContent = msg;
+    el.formNote.style.color = '#b4455e';
+  }
+
+  el.add.addEventListener('click', openForm);
+  el.modal.addEventListener('click', function (e) {
+    if (e.target.closest('[data-act="close"]')) closeForm();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && el.modal.classList.contains('is-open')) closeForm();
+  });
+
+  el.form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    resetNote();
+
+    for (var i = 0; i < REQUIRED.length; i++) {
+      var f = formField(REQUIRED[i]);
+      if (!String(f.value || '').trim()) { f.focus(); warn('Please fill in the required fields.'); return; }
+    }
+    var mail = formField('submitter_email');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail.value.trim())) {
+      mail.focus(); warn('That email address does not look right.'); return;
+    }
+
+    var data = {};
+    new FormData(el.form).forEach(function (v, k) { data[k] = String(v).trim(); });
+    data.state = 'MA';
+
+    el.submit.disabled = true;
+    el.submit.textContent = 'Sending…';
+
+    fetch(CFG.SUBMIT_URL, {
+      method: 'POST', mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(data)
+    }).then(function () {
+      el.formWrap.hidden = true;
+      el.done.hidden = false;
+    }).catch(function () {
+      el.submit.disabled = false;
+      el.submit.textContent = 'Send for review';
+      warn('That did not send. Check your connection and try again.');
+    });
   });
 
   // ---------- selects ----------
