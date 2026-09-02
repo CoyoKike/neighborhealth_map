@@ -87,7 +87,7 @@ Commit, push. The **List your organization** button appears on the map, and
 | `submit` | no | appends a listing to Submissions with an empty status |
 | `login` | no | checks the Users tab, returns a session token |
 | `logout`, `session`, `me.password` | yes | the signed-in person's own account |
-| `team.list/save/add/move/photo` | yes | the staff cards |
+| `team.list/save/add/move/photo/delete` | yes | the staff cards |
 | `queue.list/decide` | yes | the review queue; approving appends to the live tab |
 | `users.list/save` | admin | accounts |
 

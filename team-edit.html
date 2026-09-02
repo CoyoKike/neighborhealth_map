@@ -284,6 +284,7 @@
           '<span class="n">' + (i + 1) + ' of ' + rows.length + '</span>' +
         '</span>' +
         '<button class="btn go" type="button" data-act="save">Save</button>' +
+        '<button class="btn stop sm" type="button" data-act="del">Remove</button>' +
         '<span class="note"></span>' +
       '</div>';
 
@@ -352,6 +353,29 @@
           c.querySelector('.pill').hidden = v.active !== 'FALSE';
           c.classList.toggle('is-off', v.active === 'FALSE');
         }).catch(fail);
+        return;
+      }
+
+      // Two taps, not a browser confirm(): the first turns the button into the
+      // warning and the second does it, so a mis-click costs nothing and there
+      // is no modal to dismiss on a phone.
+      if (act === 'del') {
+        if (b.dataset.armed !== '1') {
+          b.dataset.armed = '1';
+          b.textContent = 'Really remove?';
+          say('This deletes the row. Click again to confirm.', 'bad');
+          setTimeout(function () {
+            if (b.dataset.armed === '1') {
+              b.dataset.armed = '';
+              b.textContent = 'Remove';
+              say('');
+            }
+          }, 6000);
+          return;
+        }
+        busy(true);
+        say('Removing…');
+        NH.call('team.delete', { row: sheetRow }).then(load).catch(fail);
         return;
       }
 

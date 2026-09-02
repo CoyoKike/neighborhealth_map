@@ -116,6 +116,7 @@ function route(req) {
     case 'team.save':     return actTeamSave(req);
     case 'team.add':      return actTeamAdd();
     case 'team.move':     return actTeamMove(req);
+    case 'team.delete':   return actTeamDelete(req);
     case 'team.photo':    return actTeamPhoto(req);
 
     case 'queue.list':    return actQueueList();
@@ -344,6 +345,25 @@ function actTeamMove(req) {
   var va = ra.getValues()[0], vb = rb.getValues()[0];
   ra.setValues([vb]);
   rb.setValues([va]);
+  return { ok: true };
+}
+
+/**
+ * Removes a card outright. Hiding a person is what `active` is for -- this is
+ * for a position that should never have existed, so it deletes the row and the
+ * ones below it shift up. The page reloads its list afterwards rather than
+ * trying to renumber in place, because every row index past this one moves.
+ *
+ * The photo is deliberately left in Drive. It may be the same file another row
+ * points at, and an orphaned image costs nothing next to deleting one that is
+ * still in use somewhere.
+ */
+function actTeamDelete(req) {
+  var t = tab(TEAM_TAB, TEAM_HEADERS);
+  var row = Number(req.row);
+  if (!(row >= 2) || row > t.getLastRow()) return { ok: false, error: 'No such row.' };
+  if (t.getLastRow() < 2) return { ok: false, error: 'Nothing to remove.' };
+  t.deleteRow(row);
   return { ok: true };
 }
 
