@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Review listings — NeighborHealth resource map</title>
+
+<!--
+  Approval queue for the "List your organization" form on the map.
+
+  Submissions arrive through the Apps Script api and sit on the Submissions tab
+  with an empty status. Approving here geocodes the address in the browser and
+  asks the api to append the row to the live tab the map publishes.
+
+  This page holds no access to the spreadsheet. Sign-in and every read and
+  write go through api.js -> apps-script/Code.gs, which is where the rules are.
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="editor.css">
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="signin.js"></script>
+
+<script>
+window.RV_CONFIG = {
+  // Same geocoder the map's address search uses, bounded to Massachusetts.
+  GEOCODE_URL: 'https://nominatim.openstreetmap.org/search',
+  VIEWBOX:     '-73.55,42.90,-69.85,41.20'
+};
+</script>
+</head>
+
+<body>
+
+<div class="bar">
+  <div>
+    <h1>Listing review</h1>
+    <div class="sub">NeighborHealth resource map</div>
+  </div>
+  <div class="spacer"></div>
+  <span class="who" id="rvWho"></span>
+  <a class="btn ghost" id="rvTeam" href="team-edit.html" hidden>Team page</a>
+  <a class="btn ghost" id="rvUsers" href="users.html" hidden>Accounts</a>
+  <button class="btn ghost" id="rvRefresh" type="button" hidden>Refresh</button>
+  <button class="btn ghost" id="rvOut" type="button" hidden>Sign out</button>
+</div>
+
+<div class="wrap">
+  <div class="state" id="rvState"><h2>Loading…</h2></div>
+  <div id="rvQueue"></div>
+  <div class="log" id="rvLog" hidden><h4>This session</h4><div id="rvLogRows"></div></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var CFG = window.RV_CONFIG;
+  var esc = NHUI.esc;
+
+  var head = [], rows = [];
+  var el = {
+    state:   document.getElementById('rvState'),
+    queue:   document.getElementById('rvQueue'),
+    who:     document.getElementById('rvWho'),
+    team:    document.getElementById('rvTeam'),
+    users:   document.getElementById('rvUsers'),
+    out:     document.getElementById('rvOut'),
+    refresh: document.getElementById('rvRefresh'),
+    log:     document.getElementById('rvLog'),
+    logRows: document.getElementById('rvLogRows')
+  };
+
+  function state(title, body, btn, onBtn) {
+    el.queue.innerHTML = '';
+    NHUI.state(el.state, title, body, btn, onBtn);
+  }
+
+  // A failed call is either "your session ended", which means show the sign-in
+  // card again, or a real error worth reading.
+  function trouble(err) {
+    if (err.auth) { chrome(false); start(); return; }
+    state('Something went wrong', err.message, 'Try again', load);
+  }
+
+  function chrome(on) {
+    el.who.textContent = on && NH.user ? NH.user.name + ' · ' + NH.user.role : '';
+    el.team.hidden = el.out.hidden = el.refresh.hidden = !on;
+    // The link is a convenience, not a gate — users.html and the api both
+    // check the role themselves.
+    el.users.hidden = !(on && NH.user && NH.user.role === 'admin');
+    if (!on) { el.log.hidden = true; el.logRows.innerHTML = ''; }
+  }
+
+  function start() {
+    NH.configure({ url: (window.NH_CONFIG_API || {}).API_URL });
+    NHUI.gate(el.state, {
+      title: 'Listing review',
+      blurb: 'Sign in with the username you were given.'
+    }, function () {
+      chrome(true);
+      load();
+    });
+  }
+
+  el.out.addEventListener('click', function () {
+    NH.logout().then(function () { chrome(false); start(); });
+  });
+  el.refresh.addEventListener('click', function () { load(); });
+
+  // ---------------------------------------------------------------- queue
+  function load() {
+    state('Loading submissions…', '');
+    NH.call('queue.list')
+      .then(function (j) {
+        head = j.head;
+        rows = j.rows;
+        render();
+      })
+      .catch(trouble);
+  }
+
+  function col(key) {
+    var w = key.toLowerCase(), i;
+    for (i = 0; i < head.length; i++) if (String(head[i]).trim().toLowerCase() === w) return i;
+    return -1;
+  }
+  function cell(row, key) {
+    var i = col(key);
+    return i > -1 ? String(row[i] == null ? '' : row[i]).trim() : '';
+  }
+
+  function record(row, i) {
+    var o = {};
+    ['submitted', 'status', 'name', 'group', 'type', 'street', 'city', 'zip', 'phone',
+     'website', 'hours', 'gender_served', 'age_served', 'notes',
+     'submitter_name', 'submitter_email'].forEach(function (k) { o[k] = cell(row, k); });
+    o._row = i + 2;                                  // 1-based, past the header
+    return o;
+  }
+
+  function address(rec) {
+    return [rec.street, rec.city, ('MA ' + (rec.zip || '')).trim()].filter(Boolean).join(', ');
+  }
+
+  function render() {
+    var pending = rows.map(record).filter(function (rec) {
+      return !rec.status && (rec.name || rec.street);   // empty status IS pending
+    });
+
+    if (!pending.length) {
+      state('Nothing waiting', 'Every submission has been reviewed. New ones show up here.',
+            'Check again', load);
+      el.log.hidden = !el.logRows.children.length;
+      return;
+    }
+
+    el.state.hidden = true;
+    el.queue.innerHTML = '';
+    pending.forEach(function (rec) { el.queue.appendChild(card(rec)); });
+  }
+
+  function card(rec) {
+    var c = document.createElement('div');
+    c.className = 'card';
+
+    var detail = [
+      ['Category', [rec.group, rec.type].filter(Boolean).join(' / ')],
+      ['Phone',    rec.phone],
+      ['Website',  rec.website ? '<a href="' + esc(rec.website) + '" target="_blank" rel="noopener">' + esc(rec.website) + '</a>' : ''],
+      ['Hours',    rec.hours],
+      ['Serves',   [rec.gender_served, rec.age_served].filter(Boolean).join(' · ')],
+      ['About',    rec.notes],
+      ['Sent by',  [rec.submitter_name, rec.submitter_email].filter(Boolean).join(' — ')]
+    ].filter(function (r) { return r[1]; });
+
+    c.innerHTML =
+      '<div class="card-head">' +
+        '<h3>' + esc(rec.name || '(no name given)') + '</h3>' +
+        '<span class="pill">' + esc(rec.group || 'Uncategorised') + '</span>' +
+        '<span class="when">' + esc(rec.submitted) + '</span>' +
+      '</div>' +
+      '<dl>' + detail.map(function (r) {
+        return '<dt>' + r[0] + '</dt><dd>' + (r[0] === 'Website' ? r[1] : esc(r[1])) + '</dd>';
+      }).join('') + '</dl>' +
+      '<div class="boxed"><div class="f">' +
+        '<label>Address to place the pin at — edit it if the geocoder cannot find it</label>' +
+        '<input type="text" value="' + esc(address(rec)) + '">' +
+        '<div class="hint">Approving looks this up, then adds the row to the map.</div>' +
+      '</div></div>' +
+      '<div class="acts">' +
+        '<button class="btn go" type="button" data-act="approve">Approve &amp; add to map</button>' +
+        '<button class="btn stop" type="button" data-act="reject">Reject</button>' +
+        '<span class="note"></span>' +
+      '</div>';
+
+    var addrIn = c.querySelector('.boxed input');
+    var hint = c.querySelector('.hint');
+    var note = c.querySelector('.note');
+
+    function busy(on) { c.classList.toggle('is-busy', !!on); }
+    function say(msg, kind) { note.textContent = msg; note.className = 'note' + (kind ? ' ' + kind : ''); }
+    function fail(err) {
+      if (err.auth) return trouble(err);
+      busy(false);
+      say(err.message || String(err), 'bad');
+    }
+
+    c.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-act]');
+      if (!b) return;
+
+      if (b.dataset.act === 'reject') {
+        busy(true);
+        say('Saving…');
+        NH.call('queue.decide', { row: rec._row, decision: 'rejected' })
+          .then(function () { finish(c, rec, false); })
+          .catch(fail);
+        return;
+      }
+
+      busy(true);
+      say('Looking up the address…');
+      hint.className = 'hint';
+
+      geocode(addrIn.value.trim())
+        .then(function (pt) {
+          if (!pt) {
+            hint.className = 'hint bad';
+            hint.textContent = 'No match for that address. Correct it above and approve again — ' +
+                               'a street number and a town usually fixes it.';
+            busy(false);
+            say('Not added.', 'bad');
+            return null;
+          }
+          say('Adding to the map…');
+          return NH.call('queue.decide', {
+            row: rec._row, decision: 'approved', lat: pt.lat, lng: pt.lng
+          }).then(function () { finish(c, rec, true); });
+        })
+        .catch(fail);
+    });
+
+    return c;
+  }
+
+  function finish(c, rec, approved) {
+    c.classList.remove('is-busy');
+    c.innerHTML = '<div class="done"><b>' + esc(rec.name) + '</b> — ' +
+      (approved ? 'approved and added to the map.' : 'rejected.') + '</div>';
+
+    // Keep the local copy in step: render() runs again when the last card
+    // clears and would otherwise rebuild the queue from rows it still believes
+    // are undecided.
+    var i = col('status');
+    if (i > -1 && rows[rec._row - 2]) rows[rec._row - 2][i] = approved ? 'approved' : 'rejected';
+
+    var line = document.createElement('div');
+    line.className = approved ? 'ok' : 'no';
+    line.innerHTML = '<b>' + (approved ? 'Approved' : 'Rejected') + '</b> — ' + esc(rec.name);
+    el.logRows.appendChild(line);
+    el.log.hidden = false;
+
+    setTimeout(function () {
+      c.remove();
+      if (!el.queue.children.length) render();
+    }, 2600);
+  }
+
+  // Nominatim, bounded to Massachusetts, same as the map's address search.
+  // Done in the browser rather than in Apps Script so the reviewer sees the
+  // miss and can fix the address before anything is written.
+  function geocode(addr) {
+    if (!addr) return Promise.resolve(null);
+    var u = CFG.GEOCODE_URL + '?format=json&limit=1&countrycodes=us&bounded=1' +
+            '&viewbox=' + encodeURIComponent(CFG.VIEWBOX) +
+            '&q=' + encodeURIComponent(addr);
+    return fetch(u, { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (j) {
+        if (!j || !j.length) return null;
+        var lat = parseFloat(j[0].lat), lng = parseFloat(j[0].lon);
+        return isFinite(lat) && isFinite(lng) ? { lat: lat, lng: lng } : null;
+      })
+      .catch(function () { return null; });
+  }
+
+  start();
+})();
+</script>
+
+</body>
+</html>

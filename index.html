@@ -23,9 +23,11 @@ window.NH_CONFIG = {
   // land in another state. Only called when the user submits an address.
   GEOCODE_URL: 'https://nominatim.openstreetmap.org/search',
   VIEWBOX:     '-73.55,42.90,-69.85,41.20',
-  // Apps Script web-app URL that receives "list your organization" submissions.
+  // "List your organization" submissions POST to a small Apps Script web app
+  // bound to the spreadsheet, which appends them to the Submissions tab as
+  // pending. review.html is where they get approved onto the live tab.
   // Leave blank and the button hides itself — see apps-script/README.md.
-  SUBMIT_URL:  ''
+  SUBMIT_URL:  'https://script.google.com/macros/s/AKfycbzckvzNL6yEqdDbBxsMoJrJAGuBnTryAXu3cUOg8FRopifr9ryR9GnH3cFKW-3-ezmSPQ/exec'
 };
 </script>
 
@@ -1294,11 +1296,11 @@ body.nh-standalone > .nh { height: 100%; }
   // ------------------------------------------------------------------
   // "List your organization"
   //
-  // Posts to an Apps Script web app, which queues the row and emails a
-  // reviewer an approve link. Apps Script answers a cross-origin POST with a
-  // redirect the browser will not expose to us, so this is send-and-trust:
-  // a text/plain body (no preflight) and an optimistic confirmation. The
-  // button stays hidden until CFG.SUBMIT_URL is filled in.
+  // Posts to the Apps Script web app, which queues the row as pending. Apps
+  // Script answers a cross-origin POST with a redirect the browser will not
+  // expose to us, so this is send-and-trust: a text/plain body (a simple
+  // content type, so there is no preflight to fail) and an optimistic
+  // confirmation. The button stays hidden until CFG.SUBMIT_URL is filled in.
   // ------------------------------------------------------------------
   var REQUIRED = ['name', 'group', 'type', 'street', 'city', 'submitter_name', 'submitter_email'];
 
@@ -1362,6 +1364,7 @@ body.nh-standalone > .nh { height: 100%; }
     var data = {};
     new FormData(el.form).forEach(function (v, k) { data[k] = String(v).trim(); });
     data.state = 'MA';
+    data.action = 'submit';        // the api routes on this; without it nothing happens
 
     el.submit.disabled = true;
     el.submit.textContent = 'Sending…';

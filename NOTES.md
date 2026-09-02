@@ -11,8 +11,15 @@ One static site, deployed two ways:
 | File | What it is | Live at |
 |---|---|---|
 | `index.html` | the resource map (Leaflet + clustering) | `https://neighborhealth-map.onrender.com/` |
-| `team.html` | "Our People" team grid, 8 placeholder cards | `https://neighborhealth-map.onrender.com/team.html` |
-| `apps-script/` | an approval backend we **decided not to use** — see §5 | — |
+| `team.html` | "Our People" team grid, sheet-driven | `…/team.html` |
+| `review.html` | approval queue for map listings — §5 | `…/review.html` |
+| `team-edit.html` | editor for the team cards — §6 | `…/team-edit.html` |
+| `users.html` | who can sign in — §7 | `…/users.html` |
+| `config.js` | one setting: the api url | — |
+| `api.js` | posts actions to the Apps Script | — |
+| `signin.js` | the sign-in card, shared by the three editor pages | — |
+| `editor.css` | shared chrome for the three editor pages | — |
+| `apps-script/Code.gs` | **the entire back end** — §5 | — |
 
 Pushing to `main` on `github.com/CoyoKike/neighborhealth_map` auto-deploys to
 Render. GitHub Pages serves the same repo.
@@ -151,61 +158,157 @@ mode and nobody sees which colour means what. After a day spent on those
 colours, that's worth fixing — either show the legend in compact mode, or put
 the map in a full-width band instead of the sidebar template.
 
-**Team photos.** The team wants to upload photos in WordPress and have
-`team.html` pick them up. Nothing links the two yet. Options discussed:
+~~**Team photos.**~~ Done — see §6. The three options considered here
+(paste Media Library urls, rebuild as a TablePress table, sheet-driven
+`team.html`) came down to the third, with a signed-in editor page on top so
+nobody edits a sheet by hand either.
 
-- Paste Media Library URLs into `team.html` — works, but requires a push per
-  change and someone comfortable editing HTML. Rejected.
-- Rebuild the section as a TablePress table so the Media picker does it — works
-  and is no-code, but loses the card design. Rejected.
-- Sheet-driven `team.html`, same pattern as the map. Not decided.
+## 5. Submissions, accounts and approval
+
+The goal: a **List your organization** button on the map, submissions queue up,
+somebody signs in and approves, approved ones land in the Google Sheet the map
+reads.
+
+**Written, not yet deployed.** The shape it settled into:
+
+| Piece | Where | What it does |
+|---|---|---|
+| the form | `index.html`, the existing modal | our own HTML form. POSTs JSON to the api. |
+| **the api** | `apps-script/Code.gs` | the only thing that touches the spreadsheet. Public actions: submit a listing, sign in. Everything else needs a session token it issued. |
+| the review page | `review.html` | lists pending rows, geocodes in the browser, asks the api to approve |
+| the accounts page | `users.html` | admin-only; add people, reset passwords, deactivate |
+
+### Two dead ends, so nobody re-walks them
+
+**Google Forms for intake.** Considered and dropped: hunting `entry.NNN` ids
+out of View Source, and a form whose look we don't control, for no gain over a
+five-minute Apps Script deploy.
+
+**Google sign-in for the editors.** Built first, then replaced. It required
+every editor to have a Google account *on the spreadsheet*, plus a Google Cloud
+project and an OAuth client id, and it made "who can edit" the same question as
+"who can open the sheet". The ask was plain usernames. That needs something
+server-side to check them — a static page cannot, and anything client-side is
+theatre — and Apps Script was already there and *is* a server. Doing it this way
+also deleted the entire Google Cloud setup step.
+
+### What still has to be done by hand
+
+1. Paste `Code.gs` into the sheet's Apps Script, fill in `SHEET_ID` and
+   `NOTIFY`, **run `bootstrap()` once** (it prints a first admin password into
+   the log, shown once), then Deploy → Web app, *Execute as: Me*,
+   *Who has access: Anyone*.
+2. Put the `/exec` url in `config.js` (`API_URL`) and in `index.html`
+   (`NH_CONFIG.SUBMIT_URL`) — same url, both places.
+3. Push. Sign in, change the admin password on `users.html`, add the real
+   people.
+
+Full steps and the action list: `apps-script/README.md`.
+
+### Details worth knowing before touching it
+
+- **After editing `Code.gs`, redeploy via Deploy → *Manage* deployments.**
+  "New deployment" mints a different `/exec` url; the pages keep calling the old
+  one, which quietly keeps running the old code. This is the most likely way
+  this whole thing appears broken.
+- **Requests go as `text/plain`.** That is one of the three content types a
+  browser sends cross-origin without a preflight, and Apps Script does not
+  answer preflights. The body is still JSON — the header is about the browser,
+  not the payload. Switching it to `application/json` breaks every editor page.
+- **Pending means an empty `status` cell.** New rows are written with `status`
+  blank on purpose — don't "improve" Code.gs to write `pending` there, the
+  review page would filter it straight back out. Clearing a `status` cell by
+  hand puts a row back in the queue.
+- **Passwords**: salted, SHA-256 iterated `HASH_ROUNDS` times, checked in the
+  script. Failed logins lock a username for 15 minutes after 8 tries. A missing
+  username is hashed anyway so the timing doesn't reveal which names are real.
+  Good enough to gate editing a staff page; not a bank. Anyone with edit access
+  to the spreadsheet can read the Users tab.
+- **The role check is on the server.** `users.html` hides its link from
+  non-admins, but that is a convenience — `users.list` and `users.save` refuse
+  a non-admin token regardless of what the page shows.
+- **Approving is written by header name, not position**, so reordering the live
+  tab's columns can't silently shift data. Columns the form doesn't collect
+  stay blank, `confidence` is `submitted`, `active` is `TRUE`.
+- **Geocoding happens in the browser**, not the script, so the reviewer sees a
+  miss and can correct the address on the card before anything is written.
+  `prepare()` in the map drops any row without `lat`/`lng`.
+- The map still can't read the reply to its own POST (it sends `no-cors`), so
+  the public form's confirmation is optimistic. The notification email is how a
+  server-side failure actually gets noticed.
+
+## 6. The team page
+
+`team.html` used to be eight hardcoded cards with a "how to fill this in"
+comment. It now renders from a **Team** tab on the same spreadsheet — one row
+per card, in the order the rows sit in — and `team-edit.html` is where a
+signed-in person edits them.
+
+| Column | What it is |
+|---|---|
+| `name` | shown under the photo |
+| `role` | the position title, small caps under the name |
+| `bio` | one or two sentences; blank is fine, the card just ends |
+| `photo` | a Drive file id, or a full url if someone pastes one |
+| `icon` | which badge sits on the photo — one of `user stetho cross chat hands heart compass leaf clip` |
+| `active` | `FALSE` hides the card without deleting the row; blank means showing |
+
+`team-edit.html` does titles, bios, photo upload, add a position, reorder, and
+hide. Setup is the same `API_URL` as the review page, plus publishing the Team
+tab as CSV (File → Share → Publish to web → Team → CSV) and pasting that url
+into `TEAM_CONFIG.SHEET_URL` in `team.html`. Note the asymmetry, it's
+deliberate: the **public** page reads a published CSV so it needs nothing and
+nobody, while **editing** goes through the api.
+
+### Things that will bite otherwise
+
+- **A published CSV is cached by Google for about five minutes.** An edit is
+  not instant on the site. This looks exactly like a broken save; it isn't.
+- **`team.html` falls back to the eight placeholder cards** if `SHEET_URL` is
+  blank, the fetch fails, or the tab has a header and nothing else. An empty
+  grid is never what anyone meant, so it keeps whatever is on screen. That also
+  means "my changes aren't showing" can mean "the fetch failed", not "the sheet
+  is wrong" — check the console.
+- **Photos go to Drive, not the sheet.** The browser resizes the image and
+  hands the api a `data:` url; `Code.gs` decodes it, files it in a folder called
+  *NeighborHealth team photos*, and makes it link-readable because the public
+  page has to load it. The folder and the files belong to whoever deployed the
+  script — not to whoever uploaded them.
+- **What's stored is a file id, not a link.** `team.html` builds
+  `drive.google.com/thumbnail?id=…&sz=w400` from it. The `/uc?id=` and
+  `/file/d/` forms redirect through a consent page for some accounts and render
+  as a broken image — don't "fix" the code to use them.
+- **Uploads are resized in the browser to 800px JPEG before they leave.** The
+  card renders at ~118px; a 5 MB phone photo would only make every visitor's
+  load slower.
+- **Reordering swaps two rows' contents**, it does not move a row. A real row
+  move needs the tab's numeric `sheetId`, and nothing else here needs that id.
+  The visible effect is the same. The page reloads after a move because every
+  card carries its sheet row number and two of them just changed.
+- **The card colours are not in the sheet.** Eight hand-picked ring/fill/pip
+  triples cycle by position in `team.html`. A ninth card starts the cycle over.
+  This was deliberate — eight more columns to fill in wrong was the alternative.
+- Saving a card writes the whole row but **preserves any column this page
+  doesn't know about**, so an extra column someone adds for their own notes
+  survives.
 
 ---
 
-## 5. Submissions and approval — direction changed, nothing built yet
+## 7. Accounts
 
-The goal: a **List your organization** button on the map, submissions get
-reviewed, approved ones land in the Google Sheet the map reads.
+`users.html`, admin only. Add someone, rename them, switch editor/admin,
+deactivate, reset a password; plus a "change your own password" card everyone
+sees.
 
-### What's in the repo now (commit `a4e2e30`, unpushed)
-
-- A toolbar button + modal form in `index.html`, hidden unless
-  `NH_CONFIG.SUBMIT_URL` is set.
-- `apps-script/Code.gs` — a Google Apps Script web app that queues submissions
-  and emails Approve/Reject links, geocoding on approve.
-
-**The form UI is worth keeping. The Apps Script approach was dropped.**
-
-### What we decided instead
-
-Keep everything static on Render. Both halves are plain HTTP from the browser,
-no server and nothing secret in the HTML:
-
-1. **Submissions** POST directly to a **Google Form**'s `formResponse` URL.
-   Anonymous, no credentials, answers land in the Form's linked sheet.
-2. **Approval** is a new page, roughly `/review.html`, using Google Sign-In.
-   The reviewer signs in with their own Google account and the browser calls the
-   Sheets API with *their* token to read pending rows and append approved ones.
-   Access control is just who the sheet is shared with — Google enforces it.
-
-I had claimed a static page couldn't do this. That was wrong; the browser-side
-OAuth path works and needs no backend.
-
-### Next steps, in order
-
-1. **Create the Google Form** with the listing fields (organisation name,
-   category, service type, street, city, ZIP, phone, website, hours, who it
-   serves, ages served, description, submitter name, submitter email). Then grab
-   its `formResponse` URL and the `entry.NNNNN` id for each field — those get
-   hardcoded into `index.html`.
-2. **Create an OAuth Client ID** (Google Cloud → Credentials → Web application)
-   with the Render origin as an authorised JavaScript origin. The client ID is
-   public and safe to commit.
-3. Rewire the modal's submit handler from `SUBMIT_URL` to the Form endpoint.
-4. Build `review.html`.
-5. Approved rows need `lat`/`lng` — `prepare()` drops any row without them. The
-   Apps Script geocoded on approve; the review page will need to do the same,
-   via `NH_CONFIG.GEOCODE_URL` (Nominatim), before it appends.
-
-`apps-script/` can be deleted once the new path works. It's left in place
-because it's a complete, working fallback if the client-side route stalls.
+- The first admin comes from `bootstrap()` in the Apps Script editor, which
+  prints a random password into the execution log **once**. Creating the first
+  account has to happen somewhere no password is required, and the script
+  editor is the only place already protected by the sheet's own sharing.
+- `resetPassword("someone", "a new password")` in the same editor is the way
+  back in if everyone is locked out.
+- An admin cannot deactivate themselves or drop their own admin role — both
+  are one click from a support call with no fix except the script editor.
+- Deactivating someone ends their open sessions immediately; so does changing
+  their password.
+- Passwords are given to people directly. Nothing is emailed, and no account
+  is tied to an email address at all.

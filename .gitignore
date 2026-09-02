@@ -1,0 +1,4 @@
+# local preview scaffolding — fake data, never deployed
+_stub.js
+_mkpreview.py
+_preview-*.html

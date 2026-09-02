@@ -3,6 +3,25 @@
 A single-file Leaflet map of Massachusetts community resources, embedded into
 WordPress via an iframe.
 
+## What is in here
+
+| file | what it is |
+|---|---|
+| `index.html` | the resource map |
+| `team.html` | the "Our People" grid, rendered from the Team tab |
+| `review.html` | queue for approving submitted listings |
+| `team-edit.html` | editor for the team cards, with photo upload |
+| `users.html` | who can sign in |
+| `apps-script/Code.gs` | the back end: intake, accounts, and every edit |
+| `config.js` | one setting — the api url |
+| `api.js`, `signin.js`, `editor.css` | shared by the three signed-in pages |
+
+The three signed-in pages have no access to the spreadsheet of their own. They
+post actions to the Apps Script web app, which checks a username and password
+against a Users tab and decides what each session may do. Nobody needs a Google
+account. Setup is in `apps-script/README.md`; the reasoning is in `NOTES.md`
+§5-§7.
+
 ## How it updates
 
 Two things change independently — neither needs a WordPress admin.

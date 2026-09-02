@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Accounts — NeighborHealth</title>
+
+<!--
+  Who can sign in to review.html and team-edit.html.
+
+  Accounts live on the Users tab. Passwords are never stored or sent back in
+  the clear; the salt and the hash never leave the Apps Script. Only an admin
+  can open this page — and "only" means the script refuses the actions, not
+  that this page hides a button. Anyone can load this file.
+
+  The first admin is created by running bootstrap() once in the Apps Script
+  editor. If everyone is locked out, resetPassword() there is the way back in.
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="editor.css">
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="signin.js"></script>
+</head>
+
+<body>
+
+<div class="bar">
+  <div>
+    <h1>Accounts</h1>
+    <div class="sub">who can sign in to the editor pages</div>
+  </div>
+  <div class="spacer"></div>
+  <span class="who" id="usWho"></span>
+  <a class="btn ghost" id="usReview" href="review.html" hidden>Listings</a>
+  <a class="btn ghost" id="usTeam" href="team-edit.html" hidden>Team page</a>
+  <button class="btn ghost" id="usOut" type="button" hidden>Sign out</button>
+</div>
+
+<div class="wrap">
+  <div class="state" id="usState"><h2>Loading…</h2></div>
+
+  <div id="usMain" hidden>
+    <div class="card">
+      <div class="card-head"><h3>People</h3></div>
+      <table class="grid" id="usTable"></table>
+    </div>
+
+    <div class="card" id="usEditor" hidden>
+      <div class="card-head"><h3 id="usEditTitle">Add someone</h3></div>
+      <form id="usForm">
+        <div class="row2">
+          <div class="f">
+            <label for="uU">Username</label>
+            <input id="uU" name="username" type="text" autocapitalize="off" spellcheck="false"
+                   autocomplete="off">
+            <div class="hint">Letters, numbers, dot, dash, underscore. Can't be changed later.</div>
+          </div>
+          <div class="f">
+            <label for="uN">Display name</label>
+            <input id="uN" name="name" type="text" autocomplete="off">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="f">
+            <label for="uR">Role</label>
+            <select id="uR" name="role">
+              <option value="editor">Editor — can review listings and edit the team page</option>
+              <option value="admin">Admin — can also manage accounts</option>
+            </select>
+          </div>
+          <div class="f">
+            <label for="uA">Account</label>
+            <select id="uA" name="active">
+              <option value="yes">Active</option>
+              <option value="no">Deactivated — can't sign in</option>
+            </select>
+          </div>
+        </div>
+        <div class="f">
+          <label for="uP">Password</label>
+          <input id="uP" name="password" type="text" autocomplete="new-password">
+          <div class="hint" id="uPHint">At least 10 characters.</div>
+        </div>
+        <div class="acts">
+          <button class="btn ghost" type="button" data-act="cancel">Cancel</button>
+          <button class="btn go" type="submit">Save</button>
+          <span class="note" id="usNote"></span>
+        </div>
+      </form>
+    </div>
+
+    <div class="addbar" style="display:flex;justify-content:center;padding:6px 0 30px">
+      <button class="btn" id="usAdd" type="button">Add someone</button>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>Your own password</h3></div>
+      <form id="usMine">
+        <div class="row2">
+          <div class="f">
+            <label for="mC">Current password</label>
+            <input id="mC" name="current" type="password" autocomplete="current-password">
+          </div>
+          <div class="f">
+            <label for="mP">New password</label>
+            <input id="mP" name="password" type="password" autocomplete="new-password">
+          </div>
+        </div>
+        <div class="acts">
+          <button class="btn" type="submit">Change it</button>
+          <span class="note" id="usMineNote"></span>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var esc = NHUI.esc;
+
+  var users = [];
+  var editing = null;                   // null = adding, otherwise the username
+
+  var el = {
+    state:  document.getElementById('usState'),
+    main:   document.getElementById('usMain'),
+    table:  document.getElementById('usTable'),
+    who:    document.getElementById('usWho'),
+    review: document.getElementById('usReview'),
+    team:   document.getElementById('usTeam'),
+    out:    document.getElementById('usOut'),
+    add:    document.getElementById('usAdd'),
+    editor: document.getElementById('usEditor'),
+    editTitle: document.getElementById('usEditTitle'),
+    form:   document.getElementById('usForm'),
+    note:   document.getElementById('usNote'),
+    pHint:  document.getElementById('uPHint'),
+    mine:   document.getElementById('usMine'),
+    mineNote: document.getElementById('usMineNote')
+  };
+
+  function state(title, body, btn, onBtn) {
+    el.main.hidden = true;
+    NHUI.state(el.state, title, body, btn, onBtn);
+  }
+
+  function trouble(err) {
+    if (err.auth) { chrome(false); start(); return; }
+    state('Something went wrong', err.message, 'Try again', load);
+  }
+
+  function chrome(on) {
+    el.who.textContent = on && NH.user ? NH.user.name + ' · ' + NH.user.role : '';
+    el.review.hidden = el.team.hidden = el.out.hidden = !on;
+  }
+
+  function start() {
+    NH.configure({ url: (window.NH_CONFIG_API || {}).API_URL });
+    NHUI.gate(el.state, {
+      title: 'Accounts',
+      blurb: 'Managing accounts needs an admin sign-in.'
+    }, function () {
+      chrome(true);
+      load();
+    });
+  }
+
+  el.out.addEventListener('click', function () {
+    NH.logout().then(function () { chrome(false); start(); });
+  });
+
+  function load() {
+    state('Loading accounts…', '');
+    NH.call('users.list')
+      .then(function (j) {
+        users = j.users;
+        el.state.hidden = true;
+        el.main.hidden = false;
+        closeEditor();
+        renderTable();
+      })
+      .catch(function (err) {
+        // An editor who followed a link here gets told what the problem is
+        // rather than an empty page.
+        if (!err.auth && /admin/i.test(err.message)) {
+          state('Admins only', 'Your account can edit the listings and the team page, ' +
+                'but not manage who signs in. Ask an admin.');
+          return;
+        }
+        trouble(err);
+      });
+  }
+
+  function renderTable() {
+    el.table.innerHTML =
+      '<tr><th>Username</th><th>Name</th><th>Role</th><th>Last signed in</th><th></th></tr>' +
+      users.map(function (u) {
+        return '<tr>' +
+          '<td>' + esc(u.username) + (u.active ? '' : ' <span class="tag off">off</span>') + '</td>' +
+          '<td>' + esc(u.name || '') + '</td>' +
+          '<td><span class="tag' + (u.role === 'admin' ? '' : ' plain') + '">' + esc(u.role) + '</span></td>' +
+          '<td class="muted">' + esc(u.last_login || 'never') + '</td>' +
+          '<td class="right"><button class="btn ghost sm" type="button" data-user="' +
+            esc(u.username) + '">Edit</button></td>' +
+        '</tr>';
+      }).join('');
+  }
+
+  el.table.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-user]');
+    if (b) openEditor(b.dataset.user);
+  });
+
+  el.add.addEventListener('click', function () { openEditor(null); });
+
+  function openEditor(username) {
+    editing = username;
+    var u = username && users.filter(function (x) { return x.username === username; })[0];
+
+    el.editTitle.textContent = u ? 'Edit ' + u.username : 'Add someone';
+    el.form.elements.username.value = u ? u.username : '';
+    el.form.elements.username.disabled = !!u;
+    el.form.elements.name.value = u ? (u.name || '') : '';
+    el.form.elements.role.value = u ? u.role : 'editor';
+    el.form.elements.active.value = u && !u.active ? 'no' : 'yes';
+    el.form.elements.password.value = '';
+    el.pHint.textContent = u
+      ? 'Leave blank to keep their current password. Setting one signs them out everywhere.'
+      : 'At least 10 characters. Give it to them directly — it is not emailed.';
+    say('');
+
+    el.editor.hidden = false;
+    el.editor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    (u ? el.form.elements.name : el.form.elements.username).focus();
+  }
+
+  function closeEditor() { el.editor.hidden = true; editing = null; }
+
+  function say(msg, kind) {
+    el.note.textContent = msg || '';
+    el.note.className = 'note' + (kind ? ' ' + kind : '');
+  }
+
+  el.form.addEventListener('click', function (e) {
+    if (e.target.closest('[data-act="cancel"]')) closeEditor();
+  });
+
+  el.form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = el.form.elements;
+    var payload = {
+      username: f.username.value.trim().toLowerCase(),
+      name: f.name.value.trim(),
+      role: f.role.value,
+      active: f.active.value === 'yes'
+    };
+    if (f.password.value) payload.password = f.password.value;
+    if (!editing && !payload.password) { say('A new account needs a password.', 'bad'); return; }
+
+    var btn = el.form.querySelector('[type=submit]');
+    btn.disabled = true;
+    say('Saving…');
+
+    NH.call('users.save', payload)
+      .then(load)
+      .catch(function (err) {
+        if (err.auth) return trouble(err);
+        say(err.message, 'bad');
+      })
+      .then(function () { btn.disabled = false; });
+  });
+
+  // ------------------------------------------------------- own password
+  el.mine.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = el.mine.elements;
+    var btn = el.mine.querySelector('[type=submit]');
+    btn.disabled = true;
+    el.mineNote.textContent = 'Saving…';
+    el.mineNote.className = 'note';
+
+    NH.call('me.password', { current: f.current.value, password: f.password.value })
+      .then(function () {
+        f.current.value = f.password.value = '';
+        el.mineNote.textContent = 'Changed.';
+        el.mineNote.className = 'note ok';
+      })
+      .catch(function (err) {
+        if (err.auth) return trouble(err);
+        el.mineNote.textContent = err.message;
+        el.mineNote.className = 'note bad';
+      })
+      .then(function () { btn.disabled = false; });
+  });
+
+  start();
+})();
+</script>
+
+</body>
+</html>

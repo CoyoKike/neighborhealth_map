@@ -6,15 +6,29 @@
 <title>Our People — Recovery Services</title>
 
 <!-- ==================================================================
-     HOW TO FILL THIS IN
-     Each person is one <article class="p"> block below. For each one:
-       1. Replace "Team Member Name" with the real name.
-       2. Replace the role line if it differs.
-       3. Replace the placeholder sentence with a 1-2 sentence bio.
-       4. For the photo, swap the whole <span class="ph">...</span>
-          for:  <img src="URL-OF-PHOTO" alt="">
-     Delete any <article class="p"> you don't need — the grid reflows.
+     WHERE THE PEOPLE COME FROM
+
+     Nobody should have to edit this file to change a name. The cards are
+     rendered from the Team tab of the same spreadsheet the map reads — one
+     row per card, in the order the rows sit in — and team-edit.html is where
+     a signed-in person edits them, uploads photos and adds positions.
+
+     To connect it: in the spreadsheet, File -> Share -> Publish to web,
+     pick the Team tab, format CSV, and paste that url into SHEET_URL below.
+
+     Google caches a published csv for about five minutes, so an edit shows up
+     on the next load after that, not instantly.
+
+     Until SHEET_URL is filled in — or if the fetch fails — the eight
+     placeholder cards written into the markup below are what renders, so the
+     page is never blank.
      ================================================================== -->
+
+<script>
+window.TEAM_CONFIG = {
+  SHEET_URL: ''
+};
+</script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -151,7 +165,7 @@ body.nh-standalone { margin: 0; }
     </p>
   </header>
 
-  <div class="team-grid">
+  <div class="team-grid" id="teamGrid">
 
     <article class="p">
       <div class="p-photo" style="--ring:#2f6fb5; --fill:#d9e8fa">
@@ -235,6 +249,118 @@ body.nh-standalone { margin: 0; }
 
   </div>
 </section>
+
+<script>
+(function () {
+  'use strict';
+  var CFG = window.TEAM_CONFIG;
+  var grid = document.getElementById('teamGrid');
+  if (!CFG || !CFG.SHEET_URL) return;      // keep the placeholder cards
+
+  // The card colours were picked by hand as a set that works side by side, so
+  // they stay here and cycle by position rather than becoming eight more
+  // columns for someone to fill in wrong. A ninth card starts the cycle over.
+  var SKINS = [
+    { ring: '#2f6fb5', fill: '#d9e8fa', pip: '#1e4d8c' },
+    { ring: '#3f8fdc', fill: '#dceafb', pip: '#e2563f' },
+    { ring: '#9ed2cb', fill: '#dcf0ed', pip: '#e793ab' },
+    { ring: '#efb54e', fill: '#fdeecb', pip: '#e79a2c' },
+    { ring: '#ee8484', fill: '#fbdcdc', pip: '#e2544f' },
+    { ring: '#c8c3ea', fill: '#e8e5f7', pip: '#4a7ec4' },
+    { ring: '#1f4f43', fill: '#d8ece2', pip: '#14624a' },
+    { ring: '#1e4f8c', fill: '#d6e6f8', pip: '#1b4a86' }
+  ];
+  var ICONS = ['user','stetho','cross','chat','hands','heart','compass','leaf','clip'];
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // A stored photo is either a Drive file id or a pasted url — anything that
+  // looks like a url is used as-is, so a WordPress media link still works.
+  // Drive's thumbnail endpoint is the one that reliably hotlinks; /uc and
+  // /file/d/ redirect through a consent page for some accounts.
+  function photoUrl(v) {
+    v = String(v || '').trim();
+    if (!v) return '';
+    return /^https?:\/\//i.test(v) ? v
+      : 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(v) + '&sz=w400';
+  }
+
+  // Minimal RFC 4180 — quoted fields, doubled quotes, newlines inside quotes.
+  // A bio with a comma in it is the normal case here, not an edge case.
+  function parseCsv(text) {
+    var rows = [], row = [], f = '', q = false, i, ch;
+    text = text.replace(/\r\n?/g, '\n');
+    for (i = 0; i < text.length; i++) {
+      ch = text[i];
+      if (q) {
+        if (ch === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; }
+        else f += ch;
+      } else if (ch === '"') q = true;
+      else if (ch === ',') { row.push(f); f = ''; }
+      else if (ch === '\n') { row.push(f); rows.push(row); row = []; f = ''; }
+      else f += ch;
+    }
+    if (f !== '' || row.length) { row.push(f); rows.push(row); }
+    return rows;
+  }
+
+  function fold(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+
+  function card(p, i) {
+    var skin = SKINS[i % SKINS.length];
+    var icon = ICONS.indexOf(p.icon) > -1 ? p.icon : 'user';
+    var url = photoUrl(p.photo);
+
+    return '<article class="p">' +
+      '<div class="p-photo" style="--ring:' + skin.ring + '; --fill:' + skin.fill + '">' +
+        (url
+          ? '<img src="' + esc(url) + '" alt="" loading="lazy">'
+          : '<span class="ph"><svg viewBox="0 0 24 24" aria-hidden="true">' +
+            '<use href="#i-user"/></svg><em>Add photo</em></span>') +
+        '<span class="p-pip" style="--pip:' + skin.pip + '">' +
+          '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-' + icon + '"/></svg>' +
+        '</span>' +
+      '</div>' +
+      '<h3 class="p-name">' + esc(p.name || 'Team Member') + '</h3>' +
+      '<p class="p-role">' + esc(p.role) + '</p>' +
+      (p.bio ? '<p class="p-bio">' + esc(p.bio) + '</p>' : '') +
+    '</article>';
+  }
+
+  fetch(CFG.SHEET_URL, { cache: 'no-store' })
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+    .then(function (text) {
+      var rows = parseCsv(text).filter(function (r) { return r.length && r.join('').trim(); });
+      if (rows.length < 2) return;                 // header only: leave the placeholders
+
+      var head = rows[0].map(fold);
+      var at = function (r, k) {
+        var i = head.indexOf(k);
+        return i > -1 ? String(r[i] == null ? '' : r[i]).trim() : '';
+      };
+
+      var people = rows.slice(1)
+        .filter(function (r) { return (at(r, 'active') || 'TRUE').toUpperCase() !== 'FALSE'; })
+        .map(function (r) {
+          return {
+            name: at(r, 'name'), role: at(r, 'role'), bio: at(r, 'bio'),
+            photo: at(r, 'photo'), icon: at(r, 'icon')
+          };
+        })
+        .filter(function (p) { return p.name || p.role; });
+
+      // Everything hidden is a plausible state; an empty grid is not what
+      // anyone meant, so keep what is already on screen.
+      if (!people.length) return;
+      grid.innerHTML = people.map(card).join('');
+    })
+    .catch(function () { /* placeholders stay */ });
+})();
+</script>
 
 </body>
 </html>

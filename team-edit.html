@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Edit the team page — NeighborHealth</title>
+
+<!--
+  Editor for the staff cards on team.html.
+
+  One row on the Team tab is one card, in the order the rows sit in. Signing in
+  lets you change a name, a position title or a bio, upload a photo, add a
+  card, reorder, and hide someone without deleting them.
+
+  This page holds no access to the spreadsheet or to Drive. Sign-in and every
+  read and write go through api.js -> apps-script/Code.gs. Photos are resized
+  here in the browser and handed to the script, which files them in Drive and
+  makes them link-readable, because the public team page has to load them.
+
+  team.html reads the same tab through its published-CSV url, which Google
+  caches for about five minutes — a change here is not instant on the site.
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="editor.css">
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="signin.js"></script>
+
+<style>
+/* The card layout is specific to this page: a round photo beside the fields. */
+.person { display: grid; grid-template-columns: 132px 1fr; gap: 22px; align-items: start; }
+
+.shot { text-align: center; }
+.shot .disc {
+  width: 116px; height: 116px; border-radius: 50%; margin: 0 auto 10px;
+  background: var(--accent-50); border: 2px solid var(--accent);
+  display: grid; place-items: center; overflow: hidden; position: relative;
+}
+.shot .disc img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.shot .disc svg { width: 30px; height: 30px; color: var(--accent); opacity: .8; }
+.shot input[type=file] { display: none; }
+.shot .pick { width: 100%; }
+.shot .prog {
+  position: absolute; inset: 0; background: rgba(255,255,255,.86);
+  display: grid; place-items: center; font-size: 11px; font-weight: 600; color: var(--accent-600);
+}
+
+.seat { display: flex; align-items: center; gap: 6px; margin-right: auto; }
+.seat .n { font-size: 12px; color: var(--ink-40); min-width: 54px; }
+.move {
+  border: 1px solid var(--line); background: #fff; cursor: pointer;
+  width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center;
+  color: var(--ink-60); line-height: 1;
+}
+.move:hover:not([disabled]) { background: var(--line-soft); color: var(--ink); }
+.move[disabled] { opacity: .35; cursor: default; }
+
+.addbar { display: flex; justify-content: center; padding: 6px 0 30px; }
+
+@media (max-width: 560px) {
+  .person { grid-template-columns: 1fr; }
+  .shot { display: flex; align-items: center; gap: 14px; text-align: left; }
+  .shot .disc { margin: 0; flex: none; }
+}
+</style>
+</head>
+
+<body>
+
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><defs>
+  <g id="i-user"><circle cx="12" cy="8.2" r="3.7" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></g>
+  <g id="i-stetho"><path d="M6 3v5a4 4 0 0 0 8 0V3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M10 12v3a5 5 0 0 0 9 3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="19.5" cy="16.5" r="2" fill="none" stroke="currentColor" stroke-width="1.9"/></g>
+  <g id="i-cross"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></g>
+  <g id="i-chat"><path d="M20 12a7 7 0 0 1-7 7H8l-4 3v-4.6A7 7 0 0 1 11 5h2a7 7 0 0 1 7 7Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></g>
+  <g id="i-hands"><path d="M12 20s-7-4.2-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.8-7 9-7 9Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></g>
+  <g id="i-heart"><path d="M12 20s-7-4.2-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.8-7 9-7 9Z" fill="currentColor"/></g>
+  <g id="i-compass"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m15 9-2 4.2-4 1.8 2-4.2L15 9Z" fill="currentColor"/></g>
+  <g id="i-leaf"><path d="M5 19c0-8 5-13 14-14 0 9-5 14-14 14Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 15c2-3 4.5-5 8-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></g>
+  <g id="i-clip"><rect x="6" y="4.5" width="12" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.5 4.5h5v2.6h-5z" fill="currentColor"/><path d="M9 12h6M9 16h4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></g>
+</defs></svg>
+
+<div class="bar">
+  <div>
+    <h1>Our People</h1>
+    <div class="sub">the cards on team.html</div>
+  </div>
+  <div class="spacer"></div>
+  <span class="who" id="teWho"></span>
+  <a class="btn ghost" id="teReview" href="review.html" hidden>Listings</a>
+  <a class="btn ghost" id="teUsers" href="users.html" hidden>Accounts</a>
+  <button class="btn ghost" id="teRefresh" type="button" hidden>Reload</button>
+  <button class="btn ghost" id="teOut" type="button" hidden>Sign out</button>
+</div>
+
+<div class="wrap">
+  <div class="state" id="teState"><h2>Loading…</h2></div>
+  <div id="teList"></div>
+  <div class="addbar" id="teAddBar" hidden>
+    <button class="btn" id="teAdd" type="button">Add a position</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var esc = NHUI.esc;
+
+  var ICONS = ['user', 'stetho', 'cross', 'chat', 'hands', 'heart', 'compass', 'leaf', 'clip'];
+  var ICON_LABELS = {
+    user: 'Person', stetho: 'Clinician', cross: 'Medical', chat: 'Counselling',
+    hands: 'Support', heart: 'Recovery', compass: 'Navigation', leaf: 'Wellness',
+    clip: 'Administration'
+  };
+
+  // Uploads are resized in the browser first. A phone photo is several
+  // megabytes and the card renders it at ~118px, so full size buys nothing and
+  // makes every visitor's page load slower.
+  var MAX_PX = 800, JPEG_Q = 0.85;
+
+  var head = [], rows = [];
+  var el = {
+    state:   document.getElementById('teState'),
+    list:    document.getElementById('teList'),
+    who:     document.getElementById('teWho'),
+    review:  document.getElementById('teReview'),
+    users:   document.getElementById('teUsers'),
+    out:     document.getElementById('teOut'),
+    refresh: document.getElementById('teRefresh'),
+    addBar:  document.getElementById('teAddBar'),
+    add:     document.getElementById('teAdd')
+  };
+
+  function state(title, body, btn, onBtn) {
+    el.list.innerHTML = '';
+    el.addBar.hidden = true;
+    NHUI.state(el.state, title, body, btn, onBtn);
+  }
+
+  function trouble(err) {
+    if (err.auth) { chrome(false); start(); return; }
+    state('Something went wrong', err.message, 'Try again', load);
+  }
+
+  function chrome(on) {
+    el.who.textContent = on && NH.user ? NH.user.name + ' · ' + NH.user.role : '';
+    el.review.hidden = el.out.hidden = el.refresh.hidden = !on;
+    // The link is a convenience, not a gate — users.html and the api both
+    // check the role themselves.
+    el.users.hidden = !(on && NH.user && NH.user.role === 'admin');
+  }
+
+  function start() {
+    NH.configure({ url: (window.NH_CONFIG_API || {}).API_URL });
+    NHUI.gate(el.state, {
+      title: 'Edit the team page',
+      blurb: 'Sign in with the username you were given.'
+    }, function () {
+      chrome(true);
+      load();
+    });
+  }
+
+  el.out.addEventListener('click', function () {
+    NH.logout().then(function () { chrome(false); start(); });
+  });
+  el.refresh.addEventListener('click', function () { load(); });
+
+  // ----------------------------------------------------------------- load
+  function load() {
+    state('Loading the team…', '');
+    NH.call('team.list')
+      .then(function (j) { head = j.head; rows = j.rows; render(); })
+      .catch(trouble);
+  }
+
+  function col(key) {
+    var w = key.toLowerCase(), i;
+    for (i = 0; i < head.length; i++) if (String(head[i]).trim().toLowerCase() === w) return i;
+    return -1;
+  }
+  function cell(row, key) {
+    var i = col(key);
+    return i > -1 ? String(row[i] == null ? '' : row[i]).trim() : '';
+  }
+
+  // A stored photo is either a Drive file id or a pasted url. Drive's
+  // thumbnail endpoint is the one that reliably hotlinks; /uc and /file/d/
+  // redirect through a consent page for some accounts.
+  function photoUrl(v, size) {
+    v = String(v || '').trim();
+    if (!v) return '';
+    if (/^(https?:|data:)/i.test(v)) return v;
+    return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(v) + '&sz=w' + (size || 300);
+  }
+
+  function render() {
+    el.state.hidden = true;
+    el.addBar.hidden = false;
+    el.list.innerHTML = '';
+    if (!rows.length) {
+      var empty = document.createElement('div');
+      empty.className = 'card';
+      empty.innerHTML = '<div class="done">No cards yet. <b>Add a position</b> to start.</div>';
+      el.list.appendChild(empty);
+      return;
+    }
+    rows.forEach(function (row, i) { el.list.appendChild(card(row, i)); });
+  }
+
+  // ----------------------------------------------------------------- card
+  function card(row, i) {
+    var sheetRow = i + 2;                       // 1-based, past the header
+    var icon = cell(row, 'icon') || 'user';
+    var photo = cell(row, 'photo');
+    var off = cell(row, 'active').toUpperCase() === 'FALSE';
+
+    var c = document.createElement('div');
+    c.className = 'card' + (off ? ' is-off' : '');
+    c.innerHTML =
+      '<div class="card-head">' +
+        '<h3>' + esc(cell(row, 'name') || 'New position') + '</h3>' +
+        '<span class="pill off"' + (off ? '' : ' hidden') + '>Hidden</span>' +
+        '<span class="when">row ' + sheetRow + '</span>' +
+      '</div>' +
+
+      '<div class="person">' +
+        '<div class="shot">' +
+          '<div class="disc">' +
+            (photo
+              ? '<img alt="" src="' + esc(photoUrl(photo)) + '">'
+              : '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-' + esc(icon) + '"/></svg>') +
+          '</div>' +
+          '<button class="btn ghost sm pick" type="button" data-act="pick">' +
+            (photo ? 'Replace photo' : 'Upload photo') + '</button>' +
+          '<input type="file" accept="image/*">' +
+        '</div>' +
+
+        '<div>' +
+          '<div class="row2">' +
+            '<div class="f"><label>Name</label>' +
+              '<input type="text" data-k="name" value="' + esc(cell(row, 'name')) + '"></div>' +
+            '<div class="f"><label>Position title</label>' +
+              '<input type="text" data-k="role" value="' + esc(cell(row, 'role')) + '"></div>' +
+          '</div>' +
+          '<div class="f"><label>Short bio</label>' +
+            '<textarea data-k="bio" maxlength="400">' + esc(cell(row, 'bio')) + '</textarea></div>' +
+          '<div class="row2">' +
+            '<div class="f"><label>Badge icon</label><select data-k="icon">' +
+              ICONS.map(function (k) {
+                return '<option value="' + k + '"' + (k === icon ? ' selected' : '') + '>' +
+                       esc(ICON_LABELS[k]) + '</option>';
+              }).join('') +
+            '</select></div>' +
+            '<div class="f"><label>On the page</label><select data-k="active">' +
+              '<option value="TRUE"' + (off ? '' : ' selected') + '>Showing</option>' +
+              '<option value="FALSE"' + (off ? ' selected' : '') + '>Hidden</option>' +
+            '</select></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="acts">' +
+        '<span class="seat">' +
+          '<button class="move" type="button" data-act="up" title="Move up" ' +
+            (i === 0 ? 'disabled' : '') + '>&#8593;</button>' +
+          '<button class="move" type="button" data-act="down" title="Move down" ' +
+            (i === rows.length - 1 ? 'disabled' : '') + '>&#8595;</button>' +
+          '<span class="n">' + (i + 1) + ' of ' + rows.length + '</span>' +
+        '</span>' +
+        '<button class="btn go" type="button" data-act="save">Save</button>' +
+        '<span class="note"></span>' +
+      '</div>';
+
+    var file = c.querySelector('input[type=file]');
+    var disc = c.querySelector('.disc');
+    var note = c.querySelector('.note');
+
+    function busy(on) { c.classList.toggle('is-busy', !!on); }
+    function say(msg, kind) { note.textContent = msg; note.className = 'note' + (kind ? ' ' + kind : ''); }
+    function fail(err) {
+      if (err.auth) return trouble(err);
+      busy(false);
+      say(err.message || String(err), 'bad');
+    }
+
+    function values() {
+      var v = { photo: photo };
+      c.querySelectorAll('[data-k]').forEach(function (f) { v[f.dataset.k] = f.value.trim(); });
+      return v;
+    }
+
+    function save() {
+      var v = values();
+      return NH.call('team.save', { row: sheetRow, values: v }).then(function (j) {
+        rows[i] = j.values;
+        return v;
+      });
+    }
+
+    c.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-act]');
+      if (!b) return;
+      var act = b.dataset.act;
+
+      if (act === 'pick') { file.click(); return; }
+
+      if (act === 'save') {
+        busy(true);
+        say('Saving…');
+        save().then(function (v) {
+          busy(false);
+          say('Saved', 'ok');
+          // The heading and the Hidden pill come from what was just written,
+          // so refresh them without reloading the whole list.
+          c.querySelector('h3').textContent = v.name || 'New position';
+          c.querySelector('.pill').hidden = v.active !== 'FALSE';
+          c.classList.toggle('is-off', v.active === 'FALSE');
+        }).catch(fail);
+        return;
+      }
+
+      if (act === 'up' || act === 'down') {
+        busy(true);
+        say('Moving…');
+        // Reload after a move: the server swapped two rows and the row numbers
+        // every card carries are now off by one for at least two of them.
+        NH.call('team.move', { row: sheetRow, dir: act }).then(load).catch(fail);
+      }
+    });
+
+    file.addEventListener('change', function () {
+      var f = file.files && file.files[0];
+      file.value = '';
+      if (!f) return;
+
+      busy(true);
+      var prog = document.createElement('div');
+      prog.className = 'prog';
+      prog.textContent = 'Resizing…';
+      disc.appendChild(prog);
+
+      shrink(f)
+        .then(function (dataUrl) {
+          prog.textContent = 'Uploading…';
+          return NH.call('team.photo', {
+            filename: (cell(row, 'name') || 'team').replace(/[^\w -]/g, '') + '.jpg',
+            dataUrl: dataUrl
+          });
+        })
+        .then(function (j) {
+          photo = j.id;
+          return save().then(function () { return j.id; });
+        })
+        .then(function (id) {
+          prog.remove();
+          disc.innerHTML = '<img alt="" src="' + esc(photoUrl(id)) + '">';
+          c.querySelector('[data-act="pick"]').textContent = 'Replace photo';
+          busy(false);
+          say('Photo saved', 'ok');
+        })
+        .catch(function (err) { prog.remove(); fail(err); });
+    });
+
+    return c;
+  }
+
+  el.add.addEventListener('click', function () {
+    el.add.disabled = true;
+    NH.call('team.add')
+      .then(function (j) {
+        rows.push(j.values);
+        render();
+        var cards = el.list.children;
+        var last = cards[cards.length - 1];
+        last.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        last.querySelector('[data-k="name"]').focus();
+      })
+      .catch(trouble)
+      .then(function () { el.add.disabled = false; });
+  });
+
+  // ---------------------------------------------------------------- resize
+  //
+  // Draws the file to a canvas at most MAX_PX on its long side and re-encodes
+  // as JPEG. Nothing leaves the browser until this has run.
+  function shrink(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        var w = img.naturalWidth, h = img.naturalHeight;
+        var scale = Math.min(1, MAX_PX / Math.max(w, h));
+        var cv = document.createElement('canvas');
+        cv.width = Math.round(w * scale);
+        cv.height = Math.round(h * scale);
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        resolve(cv.toDataURL('image/jpeg', JPEG_Q));
+      };
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new Error('That file is not an image the browser can open.'));
+      };
+      img.src = url;
+    });
+  }
+
+  start();
+})();
+</script>
+
+</body>
+</html>
