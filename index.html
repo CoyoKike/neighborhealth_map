@@ -836,9 +836,13 @@ body.nh-standalone > .nh { height: 100%; }
   var map = L.map('nhMap', { scrollWheelZoom: true, doubleClickZoom: false, zoomControl: false })
              .setView(CFG.CENTER, CFG.ZOOM);
   L.control.zoom({ position: 'bottomright' }).addTo(map);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    subdomains: 'abcd', maxZoom: 19
+  // CARTO retired their keyless basemap tier and started stamping
+  // "API KEY REQUIRED" across the tiles. OSM's standard tiles need no key and
+  // still go to zoom 19, which the address-radius search depends on. To go back
+  // to the Voyager look, get a free CARTO key and use their url with ?api_key=.
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19
   }).addTo(map);
 
   var cluster = L.markerClusterGroup({
