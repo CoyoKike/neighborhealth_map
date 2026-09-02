@@ -850,25 +850,19 @@ body.nh-standalone > .nh { height: 100%; }
   var map = L.map('nhMap', { scrollWheelZoom: true, doubleClickZoom: false, zoomControl: false })
              .setView(CFG.CENTER, CFG.ZOOM);
   L.control.zoom({ position: 'bottomright' }).addTo(map);
-  // CARTO retired their keyless basemap tier and started stamping
-  // "API KEY REQUIRED" across the tiles. OSM's standard tiles are keyless but
-  // far too busy under coloured pins — route shields, red highways, ferry lanes.
-  // Esri's Light Gray Canvas is the calmest keyless basemap: near-monochrome, so
-  // the category colours carry the map. Labels ride in a separate layer on top.
+  // Basemap history, so nobody re-treads it: CARTO retired their keyless tier
+  // and stamped "API KEY REQUIRED" over every tile, and their replacement is a
+  // 14-day trial. OSM standard is keyless but red highways and route shields
+  // fight the pins. Esri's Light Gray was calm but grey. Ocean/Terrain/Relief
+  // are colourful and calm but stop rendering at zoom 13 -- unusable once you
+  // search an address. NatGeo is colourful and far too busy.
   //
-  // It only renders to zoom 16, hence maxNativeZoom — past that Leaflet upscales.
-  // Nothing here auto-zooms deeper than 14 (see fitToResults), so that is only
-  // reachable by pinching in manually.
-  //
-  // To restore the original Voyager look: free CARTO key, then go back to
-  // https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?api_key=KEY
-  var esri = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
-  L.tileLayer(esri + 'World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+  // World Topo is the one that holds all three: free, no key, native to zoom
+  // 19, with green parks, blue water and tan urban, and roads drawn in grey
+  // rather than red so the category colours still carry the map.
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
     attribution: 'Tiles &copy; <a href="https://www.esri.com">Esri</a>',
-    maxZoom: 19, maxNativeZoom: 16
-  }).addTo(map);
-  L.tileLayer(esri + 'World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 19, maxNativeZoom: 16
+    maxZoom: 19
   }).addTo(map);
 
   var cluster = L.markerClusterGroup({
