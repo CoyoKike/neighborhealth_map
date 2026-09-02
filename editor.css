@@ -89,6 +89,41 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border: 1px solid rgba(13,43,69,.05);
 }
 
+/* ---------- brand ----------
+   The logo carries the identity, so the page title next to it steps down in
+   weight rather than competing with it. */
+.brand {
+  height: 26px; width: auto; display: block; flex: none;
+  margin-right: 4px;
+}
+.bar .brand + div h1 { font-weight: 600; }
+@media (max-width: 700px) { .brand { height: 22px; } }
+
+/* ---------- icon swatches ----------
+   Picking a badge should show the badge. A name in a dropdown made you guess
+   what "Navigation" or "Support" actually looked like on the public card. */
+.icons {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.ico {
+  width: 38px; height: 38px; flex: none;
+  display: grid; place-items: center;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: #fff; color: var(--ink-40); cursor: pointer; padding: 0;
+  transition: border-color .18s var(--ease), color .18s var(--ease),
+              background .18s var(--ease), box-shadow .18s var(--ease),
+              transform .12s var(--ease);
+}
+.ico svg { width: 20px; height: 20px; }
+.ico:hover { border-color: #cfd8e0; color: var(--ink-60); background: var(--line-soft); }
+.ico:active { transform: translateY(1px) scale(.96); }
+.ico.is-on {
+  border-color: var(--accent); color: var(--accent-600);
+  background: var(--accent-50);
+  box-shadow: 0 0 0 3px rgba(28,117,188,.13);
+}
+.icon-name { font-weight: 500; color: var(--ink-60); }
+
 /* ---------- buttons ---------- */
 .btn {
   border: 1px solid transparent; cursor: pointer; border-radius: 999px;

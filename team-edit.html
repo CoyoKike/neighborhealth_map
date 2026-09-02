@@ -84,6 +84,7 @@
 </defs></svg>
 
 <div class="bar">
+  <img class="brand" src="logo.png" alt="NeighborHealth" width="543" height="90">
   <div>
     <h1>Our People</h1>
     <div class="sub">the cards on team.html</div>
@@ -249,12 +250,23 @@
           '<div class="f"><label>Short bio</label>' +
             '<textarea data-k="bio" maxlength="400">' + esc(cell(row, 'bio')) + '</textarea></div>' +
           '<div class="row2">' +
-            '<div class="f"><label>Badge icon</label><select data-k="icon">' +
-              ICONS.map(function (k) {
-                return '<option value="' + k + '"' + (k === icon ? ' selected' : '') + '>' +
-                       esc(ICON_LABELS[k]) + '</option>';
-              }).join('') +
-            '</select></div>' +
+            '<div class="f"><label>Badge icon</label>' +
+              // The value still travels in a field with data-k, so values()
+              // picks it up exactly as the old <select> did.
+              '<input type="hidden" data-k="icon" value="' + esc(icon) + '">' +
+              '<div class="icons" role="radiogroup" aria-label="Badge icon">' +
+                ICONS.map(function (k) {
+                  return '<button type="button" class="ico' + (k === icon ? ' is-on' : '') + '"' +
+                         ' data-ico="' + k + '" role="radio"' +
+                         ' aria-checked="' + (k === icon ? 'true' : 'false') + '"' +
+                         ' title="' + esc(ICON_LABELS[k]) + '"' +
+                         ' aria-label="' + esc(ICON_LABELS[k]) + '">' +
+                           '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-' + k + '"/></svg>' +
+                         '</button>';
+                }).join('') +
+              '</div>' +
+              '<div class="hint icon-name">' + esc(ICON_LABELS[icon]) + '</div>' +
+            '</div>' +
             '<div class="f"><label>On the page</label><select data-k="active">' +
               '<option value="TRUE"' + (off ? '' : ' selected') + '>Showing</option>' +
               '<option value="FALSE"' + (off ? ' selected' : '') + '>Hidden</option>' +
@@ -278,6 +290,26 @@
     var file = c.querySelector('input[type=file]');
     var disc = c.querySelector('.disc');
     var note = c.querySelector('.note');
+
+    // Icon swatches: set the hidden field, move the selected ring, name the
+    // choice, and repaint the badge preview when no photo is covering it.
+    var iconField = c.querySelector('[data-k="icon"]');
+    var iconName = c.querySelector('.icon-name');
+    c.querySelectorAll('.ico').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var k = b.dataset.ico;
+        iconField.value = k;
+        c.querySelectorAll('.ico').forEach(function (o) {
+          var on = o === b;
+          o.classList.toggle('is-on', on);
+          o.setAttribute('aria-checked', on ? 'true' : 'false');
+        });
+        if (iconName) iconName.textContent = ICON_LABELS[k] || k;
+        if (!disc.querySelector('img')) {
+          disc.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-' + k + '"/></svg>';
+        }
+      });
+    });
 
     function busy(on) { c.classList.toggle('is-busy', !!on); }
     function say(msg, kind) { note.textContent = msg; note.className = 'note' + (kind ? ' ' + kind : ''); }
