@@ -30,6 +30,7 @@ window.TEAM_CONFIG = {
 };
 </script>
 
+<link rel="preconnect" href="https://docs.google.com">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
@@ -331,6 +332,20 @@ body.nh-standalone { margin: 0; }
     '</article>';
   }
 
+  // Google's published-csv endpoint takes 3-7s and now and then never answers
+  // at all. Waiting on it means the placeholder cards sit there for seconds, or
+  // stay for good on a hung request. So: paint the last known team immediately
+  // and treat the fetch as a background refresh. Only the very first visit on a
+  // given browser ever waits.
+  var CACHE_KEY = 'nh_team_v1';
+  function paint(people) {
+    if (people && people.length) grid.innerHTML = people.map(card).join('');
+  }
+  try {
+    var cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    paint(cached);
+  } catch (e) { /* no cache, placeholders stand */ }
+
   fetch(CFG.SHEET_URL, { cache: 'no-store' })
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
     .then(function (text) {
@@ -356,7 +371,8 @@ body.nh-standalone { margin: 0; }
       // Everything hidden is a plausible state; an empty grid is not what
       // anyone meant, so keep what is already on screen.
       if (!people.length) return;
-      grid.innerHTML = people.map(card).join('');
+      paint(people);
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(people)); } catch (e) {}
     })
     .catch(function () { /* placeholders stay */ });
 })();
