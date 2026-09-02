@@ -183,16 +183,30 @@ window.NH_CONFIG = {
 .nh-count b { color: var(--ink); font-weight: 600; }
 
 /* ---------- "list your organization" ---------- */
+/* Floating over the map's one free corner. It used to sit at the end of the
+   filter row, where it read as a seventh filter instead of an action. */
 .nh-add {
-  display: none; align-items: center; gap: 6px;
-  border: 1px solid var(--accent); background: none; cursor: pointer;
-  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--accent);
-  padding: 7px 13px; border-radius: 999px;
-  transition: background .2s var(--ease), color .2s var(--ease);
+  position: absolute; top: 14px; right: 14px; z-index: 500;
+  display: none; align-items: center; gap: 7px;
+  border: 1px solid rgba(255,255,255,.7); cursor: pointer;
+  background: rgba(255,255,255,.94);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--accent-600);
+  padding: 9px 15px; border-radius: 999px;
+  box-shadow: 0 6px 20px -6px rgba(13,43,69,.28), inset 0 1px 0 rgba(255,255,255,.9);
+  transition: background .22s var(--ease), color .22s var(--ease),
+              box-shadow .22s var(--ease), transform .12s var(--ease);
 }
 .nh-add.is-on { display: inline-flex; }
-.nh-add:hover { background: var(--accent); color: #fff; }
+.nh-add:hover {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+  box-shadow: 0 10px 26px -8px rgba(28,117,188,.55);
+}
+.nh-add:active { transform: translateY(1px) scale(.985); }
 .nh-add svg { width: 13px; height: 13px; }
+@media (max-width: 860px) {
+  .nh-add { top: 10px; right: 10px; padding: 8px 13px; font-size: 12px; }
+}
 
 .nh-modal { position: fixed; inset: 0; z-index: 1000; display: none; }
 .nh-modal.is-open { display: grid; place-items: center; }
@@ -498,15 +512,15 @@ body.nh-standalone > .nh { height: 100%; }
       <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-close"/></svg>Clear
     </button>
     <div class="nh-count" id="nhCount" role="status" aria-live="polite"></div>
-    <button class="nh-add" id="nhAdd" type="button">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus"/></svg>List your organization
-    </button>
   </div>
 
   <div class="nh-body" id="nhBody" data-view="map">
     <div class="nh-list" id="nhList"></div>
     <div class="nh-map-wrap">
       <div class="nh-map" id="nhMap"></div>
+      <button class="nh-add" id="nhAdd" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-plus"/></svg>List your organization
+      </button>
       <div class="nh-legend" id="nhLegend" hidden><h4>Categories</h4><ul></ul></div>
     </div>
 
