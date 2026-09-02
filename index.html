@@ -837,12 +837,24 @@ body.nh-standalone > .nh { height: 100%; }
              .setView(CFG.CENTER, CFG.ZOOM);
   L.control.zoom({ position: 'bottomright' }).addTo(map);
   // CARTO retired their keyless basemap tier and started stamping
-  // "API KEY REQUIRED" across the tiles. OSM's standard tiles need no key and
-  // still go to zoom 19, which the address-radius search depends on. To go back
-  // to the Voyager look, get a free CARTO key and use their url with ?api_key=.
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19
+  // "API KEY REQUIRED" across the tiles. OSM's standard tiles are keyless but
+  // far too busy under coloured pins — route shields, red highways, ferry lanes.
+  // Esri's Light Gray Canvas is the calmest keyless basemap: near-monochrome, so
+  // the category colours carry the map. Labels ride in a separate layer on top.
+  //
+  // It only renders to zoom 16, hence maxNativeZoom — past that Leaflet upscales.
+  // Nothing here auto-zooms deeper than 14 (see fitToResults), so that is only
+  // reachable by pinching in manually.
+  //
+  // To restore the original Voyager look: free CARTO key, then go back to
+  // https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?api_key=KEY
+  var esri = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
+  L.tileLayer(esri + 'World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; <a href="https://www.esri.com">Esri</a>',
+    maxZoom: 19, maxNativeZoom: 16
+  }).addTo(map);
+  L.tileLayer(esri + 'World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19, maxNativeZoom: 16
   }).addTo(map);
 
   var cluster = L.markerClusterGroup({
