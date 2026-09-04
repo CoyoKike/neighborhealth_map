@@ -60,6 +60,31 @@
 .move[disabled] { opacity: .35; cursor: default; }
 
 .addbar { display: flex; justify-content: center; padding: 6px 0 30px; }
+.addbar[hidden] { display: none; }   /* flex would otherwise beat [hidden] */
+
+/* Colour swatches: each one is the card's ring, fill and badge in miniature,
+   so what you pick is what the public card looks like. */
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.sw {
+  width: 38px; height: 38px; flex: none; position: relative; padding: 0;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: #fff; cursor: pointer; display: grid; place-items: center;
+  transition: border-color .18s var(--ease), box-shadow .18s var(--ease), transform .12s var(--ease);
+}
+.sw i {
+  width: 22px; height: 22px; border-radius: 50%; display: block; position: relative;
+  background: var(--fill); border: 2px solid var(--ring);
+}
+.sw i::after {
+  content: ''; position: absolute; right: -3px; bottom: -3px;
+  width: 9px; height: 9px; border-radius: 50%; background: var(--pip);
+  box-shadow: 0 0 0 1.5px #fff;
+}
+.sw.auto i { border-style: dashed; border-color: var(--ink-40); background: transparent; }
+.sw.auto i::after { display: none; }
+.sw:hover { border-color: #cfd8e0; background: var(--line-soft); }
+.sw:active { transform: translateY(1px) scale(.96); }
+.sw.is-on { border-color: var(--accent); background: var(--accent-50); box-shadow: 0 0 0 3px rgba(28,117,188,.13); }
 
 @media (max-width: 560px) {
   .person { grid-template-columns: 1fr; }
@@ -117,6 +142,26 @@
     hands: 'Support', heart: 'Recovery', compass: 'Navigation', leaf: 'Wellness',
     clip: 'Administration'
   };
+
+  // The same eight colour sets team.html paints with, by the same names.
+  // Blank means "automatic": the public page cycles through them by position.
+  var SKINS = {
+    'cobalt':         { ring: '#1e64af', fill: '#ced0f2', pip: '#1e64af' },
+    'warm-blue':      { ring: '#50a7ef', fill: '#c0e5ed', pip: '#1e64af' },
+    'periwinkle':     { ring: '#667ef2', fill: '#ced0f2', pip: '#667ef2' },
+    'forest':         { ring: '#0d5155', fill: '#c0e5ed', pip: '#0d5155' },
+    'eggplant':       { ring: '#633b63', fill: '#ced0f2', pip: '#633b63' },
+    'cobalt-sky':     { ring: '#1e64af', fill: '#c0e5ed', pip: '#253e4d' },
+    'periwinkle-sky': { ring: '#667ef2', fill: '#c0e5ed', pip: '#0d5155' },
+    'charcoal':       { ring: '#253e4d', fill: '#ced0f2', pip: '#1e64af' }
+  };
+  var SKIN_ORDER = Object.keys(SKINS);
+  var SKIN_LABELS = {
+    'cobalt': 'Cobalt', 'warm-blue': 'Warm Blue', 'periwinkle': 'Periwinkle', 'forest': 'Forest',
+    'eggplant': 'Eggplant', 'cobalt-sky': 'Cobalt on Sky', 'periwinkle-sky': 'Periwinkle on Sky',
+    'charcoal': 'Charcoal'
+  };
+  function skinFor(color, i) { return SKINS[color] || SKINS[SKIN_ORDER[i % SKIN_ORDER.length]]; }
 
   // Uploads are resized in the browser first. A phone photo is several
   // megabytes and the card renders it at ~118px, so full size buys nothing and
@@ -219,6 +264,9 @@
     var sheetRow = i + 2;                       // 1-based, past the header
     var icon = cell(row, 'icon') || 'user';
     var photo = cell(row, 'photo');
+    var color = cell(row, 'color').toLowerCase();
+    if (!SKINS[color]) color = '';
+    var skin = skinFor(color, i);
     var off = cell(row, 'active').toUpperCase() === 'FALSE';
 
     var c = document.createElement('div');
@@ -232,7 +280,7 @@
 
       '<div class="person">' +
         '<div class="shot">' +
-          '<div class="disc">' +
+          '<div class="disc" style="border-color:' + skin.ring + ';background:' + skin.fill + '">' +
             (photo
               ? '<img alt="" src="' + esc(photoUrl(photo)) + '">'
               : '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-' + esc(icon) + '"/></svg>') +
@@ -274,6 +322,21 @@
               '<option value="FALSE"' + (off ? ' selected' : '') + '>Hidden</option>' +
             '</select></div>' +
           '</div>' +
+          '<div class="f"><label>Card colour</label>' +
+            '<input type="hidden" data-k="color" value="' + esc(color) + '">' +
+            '<div class="swatches" role="radiogroup" aria-label="Card colour">' +
+              '<button type="button" class="sw auto' + (color ? '' : ' is-on') + '" data-sw="" role="radio"' +
+                ' aria-checked="' + (color ? 'false' : 'true') + '" title="Automatic" aria-label="Automatic"><i></i></button>' +
+              SKIN_ORDER.map(function (k) {
+                var sk = SKINS[k];
+                return '<button type="button" class="sw' + (k === color ? ' is-on' : '') + '" data-sw="' + k + '"' +
+                       ' role="radio" aria-checked="' + (k === color ? 'true' : 'false') + '"' +
+                       ' title="' + esc(SKIN_LABELS[k]) + '" aria-label="' + esc(SKIN_LABELS[k]) + '"' +
+                       ' style="--ring:' + sk.ring + ';--fill:' + sk.fill + ';--pip:' + sk.pip + '"><i></i></button>';
+              }).join('') +
+            '</div>' +
+            '<div class="hint sw-name">' + (color ? esc(SKIN_LABELS[color]) : 'Automatic — takes the next colour in the set') + '</div>' +
+          '</div>' +
         '</div>' +
       '</div>' +
 
@@ -311,6 +374,26 @@
         if (!disc.querySelector('img')) {
           disc.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-' + k + '"/></svg>';
         }
+      });
+    });
+
+    // Colour swatches: same idea as the icons. The disc preview repaints so the
+    // ring and fill are seen with the actual photo before anything is saved.
+    var colorField = c.querySelector('[data-k="color"]');
+    var swName = c.querySelector('.sw-name');
+    c.querySelectorAll('.sw').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var k = b.dataset.sw;
+        colorField.value = k;
+        c.querySelectorAll('.sw').forEach(function (o) {
+          var on = o === b;
+          o.classList.toggle('is-on', on);
+          o.setAttribute('aria-checked', on ? 'true' : 'false');
+        });
+        var sk = skinFor(k, i);
+        disc.style.borderColor = sk.ring;
+        disc.style.background = sk.fill;
+        if (swName) swName.textContent = k ? SKIN_LABELS[k] : 'Automatic — takes the next colour in the set';
       });
     });
 

@@ -72,7 +72,7 @@ var QUEUE_HEADERS = [
 // The columns a reviewer may change on a pending submission before approving.
 var QUEUE_EDITABLE = ['name', 'group', 'type', 'street', 'city', 'state', 'zip', 'phone',
                       'website', 'hours', 'gender_served', 'age_served', 'notes'];
-var TEAM_HEADERS  = ['name', 'role', 'bio', 'photo', 'icon', 'active'];
+var TEAM_HEADERS  = ['name', 'role', 'bio', 'photo', 'icon', 'color', 'active'];
 var USERS_HEADERS = ['username', 'display_name', 'role', 'active',
                      'salt', 'hash', 'rounds', 'created', 'last_login'];
 

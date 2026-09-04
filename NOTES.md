@@ -251,6 +251,7 @@ signed-in person edits them.
 | `bio` | one or two sentences; blank is fine, the card just ends |
 | `photo` | a Drive file id, or a full url if someone pastes one |
 | `icon` | which badge sits on the photo — one of `user stetho cross chat hands heart compass leaf clip` |
+| `color` | the card's ring/fill/badge set — one of `cobalt warm-blue periwinkle forest eggplant cobalt-sky periwinkle-sky charcoal`; blank means automatic (cycle by position) |
 | `active` | `FALSE` hides the card without deleting the row; blank means showing |
 
 `team-edit.html` does titles, bios, photo upload, add a position, reorder, and
@@ -285,9 +286,11 @@ nobody, while **editing** goes through the api.
   move needs the tab's numeric `sheetId`, and nothing else here needs that id.
   The visible effect is the same. The page reloads after a move because every
   card carries its sheet row number and two of them just changed.
-- **The card colours are not in the sheet.** Eight hand-picked ring/fill/pip
-  triples cycle by position in `team.html`. A ninth card starts the cycle over.
-  This was deliberate — eight more columns to fill in wrong was the alternative.
+- **Card colours.** Eight brand ring/fill/badge sets live in `team.html` (and,
+  by the same names, in `team-edit.html`). A row's `color` column picks one;
+  blank cycles by position, so a ninth card starts the set over. The `color`
+  column is added to the Team tab by `ensureColumns` the first time the editor
+  loads after the script is redeployed with the new `TEAM_HEADERS`.
 - Saving a card writes the whole row but **preserves any column this page
   doesn't know about**, so an extra column someone adds for their own notes
   survives.

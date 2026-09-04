@@ -248,19 +248,21 @@ body.nh-standalone { margin: 0; }
   var grid = document.getElementById('teamGrid');
   if (!CFG || !CFG.SHEET_URL) return;      // keep the placeholder cards
 
-  // The card colours were picked by hand as a set that works side by side, so
-  // they stay here and cycle by position rather than becoming eight more
-  // columns for someone to fill in wrong. A ninth card starts the cycle over.
-  var SKINS = [
-    { ring: '#1e64af', fill: '#ced0f2', pip: '#1e64af' },
-    { ring: '#50a7ef', fill: '#c0e5ed', pip: '#1e64af' },
-    { ring: '#667ef2', fill: '#ced0f2', pip: '#667ef2' },
-    { ring: '#0d5155', fill: '#c0e5ed', pip: '#0d5155' },
-    { ring: '#633b63', fill: '#ced0f2', pip: '#633b63' },
-    { ring: '#1e64af', fill: '#c0e5ed', pip: '#253e4d' },
-    { ring: '#667ef2', fill: '#c0e5ed', pip: '#0d5155' },
-    { ring: '#253e4d', fill: '#ced0f2', pip: '#1e64af' }
-  ];
+  // Eight card colour sets, all from the brand palette. A card whose `color`
+  // column names one of these gets it; otherwise the sets cycle by position,
+  // so a team with no colours filled in still reads as a deliberate spread.
+  // The editor (team-edit.html) offers the same eight by name — keep in step.
+  var SKINS = {
+    'cobalt':         { ring: '#1e64af', fill: '#ced0f2', pip: '#1e64af' },
+    'warm-blue':      { ring: '#50a7ef', fill: '#c0e5ed', pip: '#1e64af' },
+    'periwinkle':     { ring: '#667ef2', fill: '#ced0f2', pip: '#667ef2' },
+    'forest':         { ring: '#0d5155', fill: '#c0e5ed', pip: '#0d5155' },
+    'eggplant':       { ring: '#633b63', fill: '#ced0f2', pip: '#633b63' },
+    'cobalt-sky':     { ring: '#1e64af', fill: '#c0e5ed', pip: '#253e4d' },
+    'periwinkle-sky': { ring: '#667ef2', fill: '#c0e5ed', pip: '#0d5155' },
+    'charcoal':       { ring: '#253e4d', fill: '#ced0f2', pip: '#1e64af' }
+  };
+  var SKIN_ORDER = Object.keys(SKINS);
   var ICONS = ['user','stetho','cross','chat','hands','heart','compass','leaf','clip'];
 
   function esc(s) {
@@ -302,7 +304,7 @@ body.nh-standalone { margin: 0; }
   function fold(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
 
   function card(p, i) {
-    var skin = SKINS[i % SKINS.length];
+    var skin = SKINS[p.color] || SKINS[SKIN_ORDER[i % SKIN_ORDER.length]];
     var icon = ICONS.indexOf(p.icon) > -1 ? p.icon : 'user';
     var url = photoUrl(p.photo);
 
@@ -327,7 +329,7 @@ body.nh-standalone { margin: 0; }
   // stay for good on a hung request. So: paint the last known team immediately
   // and treat the fetch as a background refresh. Only the very first visit on a
   // given browser ever waits.
-  var CACHE_KEY = 'nh_team_v1';
+  var CACHE_KEY = 'nh_team_v2';       // v2: cards carry a colour
   function paint(people) {
     if (people && people.length) grid.innerHTML = people.map(card).join('');
   }
@@ -353,7 +355,7 @@ body.nh-standalone { margin: 0; }
         .map(function (r) {
           return {
             name: at(r, 'name'), role: at(r, 'role'), bio: at(r, 'bio'),
-            photo: at(r, 'photo'), icon: at(r, 'icon')
+            photo: at(r, 'photo'), icon: at(r, 'icon'), color: at(r, 'color').toLowerCase()
           };
         })
         .filter(function (p) { return p.name || p.role; });
