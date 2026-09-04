@@ -57,23 +57,18 @@ body.nh-standalone { margin: 0; }
   padding: clamp(38px, 6vw, 76px) clamp(18px, 4vw, 56px) clamp(44px, 6vw, 82px);
 }
 
-/* Decorative ribbons. Purely ornamental, so they sit behind everything and
-   are hidden from assistive tech. */
-.team-deco { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; }
-.team-deco path { fill: none; stroke-width: 1.4; vector-effect: non-scaling-stroke; }
-
 /* ---------- heading ---------- */
 .team-head { text-align: center; max-width: 620px; margin: 0 auto clamp(34px, 5vw, 60px); }
 .team-eyebrow {
-  margin: 0 0 14px; font-size: 11px; font-weight: 600;
+  margin: 0 0 14px; font-size: 13px; font-weight: 600;
   letter-spacing: .18em; text-transform: uppercase; color: var(--blue);
 }
 .team-title {
   margin: 0 0 18px; font-family: 'Playfair Display', Georgia, serif;
   font-weight: 500; color: var(--navy); line-height: 1.14;
-  font-size: clamp(30px, 5.2vw, 46px); letter-spacing: -.01em;
+  font-size: clamp(34px, 5.6vw, 52px); letter-spacing: -.01em;
 }
-.team-sub { margin: 0; font-size: clamp(14px, 1.6vw, 15.5px); line-height: 1.6; color: var(--ink-60); }
+.team-sub { margin: 0; font-size: clamp(16px, 1.8vw, 18px); line-height: 1.6; color: var(--ink-60); }
 
 /* ---------- grid ---------- */
 .team-grid {
@@ -119,13 +114,13 @@ body.nh-standalone { margin: 0; }
 /* ---------- text ---------- */
 .p-name {
   margin: 0 0 5px; font-family: 'Playfair Display', Georgia, serif;
-  font-weight: 500; font-size: 17.5px; color: var(--navy);
+  font-weight: 500; font-size: 21px; color: var(--navy);
 }
 .p-role {
-  margin: 0 0 10px; font-size: 10.5px; font-weight: 700;
+  margin: 0 0 10px; font-size: 12.5px; font-weight: 700;
   letter-spacing: .1em; text-transform: uppercase; color: var(--blue);
 }
-.p-bio { margin: 0; font-size: 12.8px; line-height: 1.62; color: var(--ink-40); }
+.p-bio { margin: 0; font-size: 15.5px; line-height: 1.6; color: var(--ink-40); }
 
 @media (prefers-reduced-motion: reduce) {
   .p-photo { transition: none; }
@@ -151,11 +146,6 @@ body.nh-standalone { margin: 0; }
 </svg>
 
 <section class="team">
-
-  <svg class="team-deco" viewBox="0 0 1440 820" preserveAspectRatio="none" aria-hidden="true">
-    <path d="M-40 430 C 260 300, 420 470, 700 400 S 1180 120, 1500 190" stroke="#b7cde6"/>
-    <path d="M-40 720 C 200 690, 360 800, 640 740 S 1120 560, 1500 620" stroke="#f0cba4"/>
-  </svg>
 
   <header class="team-head">
     <p class="team-eyebrow">Our People</p>
