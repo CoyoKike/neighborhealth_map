@@ -39,10 +39,10 @@ window.TEAM_CONFIG = {
 :root {
   --navy:    #253e4d;   /* brand Charcoal */
   --blue:    #1e64af;   /* brand Cobalt */
-  --ink:     #1d2b3a;
-  --ink-60:  #5d6b7a;
-  --ink-40:  #8d99a6;
-  --canvas:  #f6f7f8;
+  --ink:     #253e4d;              /* brand Charcoal */
+  --ink-60:  rgba(37,62,77,.74);   /* Charcoal, softened */
+  --ink-40:  rgba(37,62,77,.56);
+  --canvas:  #f6f6f6;              /* brand Ivory */
   --ease:    cubic-bezier(.4,.14,.3,1);
 }
 
@@ -169,7 +169,7 @@ body.nh-standalone { margin: 0; }
     </article>
 
     <article class="p">
-      <div class="p-photo" style="--ring:#fe8979; --fill:#c0e5ed">
+      <div class="p-photo" style="--ring:#50a7ef; --fill:#c0e5ed">
         <span class="ph"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-user"/></svg><em>Add photo</em></span>
         <span class="p-pip" style="--pip:#1e64af"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cross"/></svg></span>
       </div>
@@ -179,9 +179,9 @@ body.nh-standalone { margin: 0; }
     </article>
 
     <article class="p">
-      <div class="p-photo" style="--ring:#50a7ef; --fill:#ffdfd7">
+      <div class="p-photo" style="--ring:#667ef2; --fill:#ced0f2">
         <span class="ph"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-user"/></svg><em>Add photo</em></span>
-        <span class="p-pip" style="--pip:#633b63"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chat"/></svg></span>
+        <span class="p-pip" style="--pip:#667ef2"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chat"/></svg></span>
       </div>
       <h3 class="p-name">Team Member Name</h3>
       <p class="p-role">Licensed Counselor (LICSW)</p>
@@ -199,9 +199,9 @@ body.nh-standalone { margin: 0; }
     </article>
 
     <article class="p">
-      <div class="p-photo" style="--ring:#667ef2; --fill:#ced0f2">
+      <div class="p-photo" style="--ring:#633b63; --fill:#ced0f2">
         <span class="ph"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-user"/></svg><em>Add photo</em></span>
-        <span class="p-pip" style="--pip:#667ef2"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-heart"/></svg></span>
+        <span class="p-pip" style="--pip:#633b63"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-heart"/></svg></span>
       </div>
       <h3 class="p-name">Team Member Name</h3>
       <p class="p-role">Recovery Coach</p>
@@ -209,9 +209,9 @@ body.nh-standalone { margin: 0; }
     </article>
 
     <article class="p">
-      <div class="p-photo" style="--ring:#ffb35a; --fill:#c0e5ed">
+      <div class="p-photo" style="--ring:#1e64af; --fill:#c0e5ed">
         <span class="ph"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-user"/></svg><em>Add photo</em></span>
-        <span class="p-pip" style="--pip:#0d5155"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-compass"/></svg></span>
+        <span class="p-pip" style="--pip:#253e4d"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-compass"/></svg></span>
       </div>
       <h3 class="p-name">Team Member Name</h3>
       <p class="p-role">Care Navigator</p>
@@ -219,9 +219,9 @@ body.nh-standalone { margin: 0; }
     </article>
 
     <article class="p">
-      <div class="p-photo" style="--ring:#633b63; --fill:#ffdfd7">
+      <div class="p-photo" style="--ring:#667ef2; --fill:#c0e5ed">
         <span class="ph"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-user"/></svg><em>Add photo</em></span>
-        <span class="p-pip" style="--pip:#633b63"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-leaf"/></svg></span>
+        <span class="p-pip" style="--pip:#0d5155"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-leaf"/></svg></span>
       </div>
       <h3 class="p-name">Team Member Name</h3>
       <p class="p-role">Nurse</p>
@@ -229,9 +229,9 @@ body.nh-standalone { margin: 0; }
     </article>
 
     <article class="p">
-      <div class="p-photo" style="--ring:#50a7ef; --fill:#ced0f2">
+      <div class="p-photo" style="--ring:#253e4d; --fill:#ced0f2">
         <span class="ph"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-user"/></svg><em>Add photo</em></span>
-        <span class="p-pip" style="--pip:#253e4d"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clip"/></svg></span>
+        <span class="p-pip" style="--pip:#1e64af"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clip"/></svg></span>
       </div>
       <h3 class="p-name">Team Member Name</h3>
       <p class="p-role">Nurse Manager</p>
@@ -253,13 +253,13 @@ body.nh-standalone { margin: 0; }
   // columns for someone to fill in wrong. A ninth card starts the cycle over.
   var SKINS = [
     { ring: '#1e64af', fill: '#ced0f2', pip: '#1e64af' },
-    { ring: '#fe8979', fill: '#c0e5ed', pip: '#1e64af' },
-    { ring: '#50a7ef', fill: '#ffdfd7', pip: '#633b63' },
-    { ring: '#0d5155', fill: '#c0e5ed', pip: '#0d5155' },
+    { ring: '#50a7ef', fill: '#c0e5ed', pip: '#1e64af' },
     { ring: '#667ef2', fill: '#ced0f2', pip: '#667ef2' },
-    { ring: '#ffb35a', fill: '#c0e5ed', pip: '#0d5155' },
-    { ring: '#633b63', fill: '#ffdfd7', pip: '#633b63' },
-    { ring: '#50a7ef', fill: '#ced0f2', pip: '#253e4d' }
+    { ring: '#0d5155', fill: '#c0e5ed', pip: '#0d5155' },
+    { ring: '#633b63', fill: '#ced0f2', pip: '#633b63' },
+    { ring: '#1e64af', fill: '#c0e5ed', pip: '#253e4d' },
+    { ring: '#667ef2', fill: '#c0e5ed', pip: '#0d5155' },
+    { ring: '#253e4d', fill: '#ced0f2', pip: '#1e64af' }
   ];
   var ICONS = ['user','stetho','cross','chat','hands','heart','compass','leaf','clip'];
 
