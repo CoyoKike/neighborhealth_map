@@ -645,17 +645,30 @@ body.nh-standalone > .nh { height: 100%; }
   'use strict';
   var CFG = window.NH_CONFIG;
 
+  // Pin colours come straight from the NeighborHealth brand guide (Jan 2024):
+  // Cobalt, Warm Blue, Periwinkle, Eggplant, Salmon, Sunshine, Forest,
+  // Charcoal. The three groups that dominate the map on first open are
+  // Recovery (Eggplant), Senior Services (Warm Blue) and Health (Cobalt).
+  // The pale brand tints (Sky, Liliac, Pale Pink, Ivory) are left out — a pin
+  // that light disappears on the basemap.
   var GROUP_COLORS = {
-    'Addiction & Recovery':                '#6a4fa3',
-    'Health':                              '#2a8c7a',
-    'Older Adults':                        '#c2661c',
-    'Shelter & Housing':                   '#a83e5b',
-    'Food & Basic Needs':                  '#c2951c',
-    'Community Services':                  '#3a6ea5',
-    'Mental Health':                       '#5f9147',
-    'Medication Assisted Treatment (MAT)': '#8a6a42'
+    'Addiction & Recovery':                '#633b63',  // Eggplant
+    'Health':                              '#1e64af',  // Cobalt
+    'Senior Services':                     '#50a7ef',  // Warm Blue
+    'Shelter & Housing':                   '#fe8979',  // Salmon
+    'Food & Basic Needs':                  '#ffb35a',  // Sunshine
+    'Community Services':                  '#667ef2',  // Periwinkle
+    'Mental Health':                       '#0d5155',  // Forest
+    'Medication Assisted Treatment (MAT)': '#253e4d'   // Charcoal
   };
   var colorFor = function (g) { return GROUP_COLORS[g] || '#5a6672'; };
+
+  // The sheet still says "Older Adults" on every Council on Aging row; the map
+  // shows it as "Senior Services". Renaming here means nobody has to edit
+  // hundreds of rows, and the submission form (which lists GROUP_COLORS keys)
+  // writes the new name from now on. Both spellings land in the same group.
+  var GROUP_ALIASES = { 'Older Adults': 'Senior Services' };
+  var groupName = function (g) { return GROUP_ALIASES[g] || g; };
 
   // Cluster bubbles are tinted from the same hex as the pins they swallow, so
   // the halo has to be built in JS — the colour isn't known until the cluster
@@ -798,7 +811,7 @@ body.nh-standalone > .nh { height: 100%; }
         var parts = String(r.category || '').split(' / ');
         r._id = 'r' + i;
         r._lat = lat; r._lng = lng;
-        r._group = (parts[0] || 'Other').trim();
+        r._group = groupName((parts[0] || 'Other').trim());
         r._type = (parts[1] || parts[0] || 'Resource').trim();
         r._color = colorFor(r._group);
         r._addr = [r.street, r.city, ((r.state || '') + ' ' + padZip(r.zip)).trim()]
