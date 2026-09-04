@@ -330,3 +330,35 @@ still say `Older Adults / Council on Aging`, the 457 recovery rows still say
 as `Senior Services / …`; both spellings land in the same group. If someone
 later bulk-renames the sheet column, nothing breaks — the alias just stops
 matching anything.
+
+## 9. The resources editor (2026-09-04)
+
+`resources.html` is the fourth signed-in page: the whole Resources tab,
+searchable, with an editor card for one row at a time. Add, edit, delete.
+Back end is `resources.list/save/add/delete` in `Code.gs`, which **has to be
+redeployed** (Deploy -> Manage deployments -> edit -> new version) before the
+page does anything but sign in.
+
+Things worth knowing:
+
+- **The form is built from the sheet's header row.** Known columns get a
+  proper control (category picker, textareas, the coordinates finder); any
+  column the page has never heard of shows up under "Other columns" as a text
+  box, and a save writes back every column it did not touch. Adding a column
+  to the sheet needs no code change here.
+- **Row numbers are the handle, with a guard.** Every save and delete sends
+  `expect`, the name the page saw on that row. If someone else deleted a row
+  above it in the meantime, the server sees a different name and refuses
+  instead of overwriting the wrong organisation. The page reloads after every
+  delete for the same reason.
+- **The category picker writes the new names** (Recovery Services, Senior
+  Services). It does not rewrite an existing row's older spelling unless the
+  category is actually changed, so opening and saving a row is not a mass
+  rename. The map shows both spellings under the new label anyway.
+- **Coordinates.** Saving a row that has an address but no lat/lng geocodes it
+  first (Nominatim, same as the map). A row still without coordinates is saved
+  but flagged "No pin" in the list, and the status filter can find them all.
+- **ZIPs keep their leading zero.** `writeLiveRow` formats the zip cell as
+  text before writing, which is the same trap the import notes in section 1
+  warn about, fixed at the source.
+- Editors and admins both get the page. Accounts stay admin-only.

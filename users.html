@@ -38,6 +38,7 @@
   <div class="spacer"></div>
   <span class="who" id="usWho"></span>
   <a class="btn ghost" id="usReview" href="review.html" hidden>Listings</a>
+  <a class="btn ghost" id="usRes" href="resources.html" hidden>All resources</a>
   <a class="btn ghost" id="usTeam" href="team-edit.html" hidden>Team page</a>
   <button class="btn ghost" id="usOut" type="button" hidden>Sign out</button>
 </div>
@@ -135,6 +136,7 @@
     table:  document.getElementById('usTable'),
     who:    document.getElementById('usWho'),
     review: document.getElementById('usReview'),
+    res:     document.getElementById('usRes'),
     team:   document.getElementById('usTeam'),
     out:    document.getElementById('usOut'),
     add:    document.getElementById('usAdd'),
@@ -160,6 +162,7 @@
   function chrome(on) {
     el.who.textContent = on && NH.user ? NH.user.name + ' · ' + NH.user.role : '';
     el.review.hidden = el.team.hidden = el.out.hidden = !on;
+    el.res.hidden = el.review.hidden;
   }
 
   function start() {

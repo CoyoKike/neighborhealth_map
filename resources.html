@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>All resources — NeighborHealth resource map</title>
+
+<!--
+  The live list behind the map, edited in place.
+
+  Every row on the Resources tab is a pin. This page lists them all, lets a
+  signed-in person search and filter, open one and change any field, add a new
+  one, or delete one. Nothing is staged: a save is on the public map as soon as
+  Google's published-CSV cache turns over, about five minutes.
+
+  The form is built from the sheet's header row, not a list in this file, so a
+  column somebody adds to the sheet shows up here as a plain text field and is
+  never blanked by a save. The fields this page knows about get a better
+  control: a category picker, textareas for the long ones, a coordinates
+  finder for lat/lng.
+
+  This page holds no access to the spreadsheet. Sign-in and every read and
+  write go through api.js -> apps-script/Code.gs, which is where the rules are.
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="editor.css">
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="signin.js"></script>
+
+<script>
+window.RS_CONFIG = {
+  // Same geocoder the map and the review page use, bounded to Massachusetts.
+  GEOCODE_URL: 'https://nominatim.openstreetmap.org/search',
+  VIEWBOX:     '-73.55,42.90,-69.85,41.20',
+  PAGE:        200                       // rows shown before "Show more"
+};
+</script>
+
+<style>
+/* The list is wide by nature, so this page gets a little more room than the
+   card-based editors. */
+.wrap { max-width: 1120px; }
+
+/* ---------- toolbar ---------- */
+.tools {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.tools[hidden], .more[hidden] { display: none; }   /* flex would otherwise beat [hidden] */
+.tools .search {
+  flex: 1 1 260px; position: relative;
+}
+.tools .search input {
+  width: 100%; border: 1px solid var(--line); border-radius: 999px;
+  padding: 10px 14px 10px 38px; font-size: 14px; background: #fff; outline: none;
+  transition: border-color .2s var(--ease), box-shadow .2s var(--ease);
+}
+.tools .search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(28,117,188,.13); }
+.tools .search svg {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  width: 15px; height: 15px; color: var(--ink-40); pointer-events: none;
+}
+.tools select {
+  border: 1px solid var(--line); border-radius: 999px; background: #fff;
+  padding: 9px 32px 9px 14px; font-size: 13.5px; color: var(--ink); outline: none;
+  appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235a6672' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 13px center;
+}
+.tools select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(28,117,188,.13); }
+.tools .count { font-size: 13px; color: var(--ink-40); font-variant-numeric: tabular-nums; margin-left: auto; }
+
+/* ---------- list ---------- */
+.list { padding: 6px 24px 10px; }
+.grid th:first-child, .grid td:first-child { padding-left: 0; }
+.grid tbody tr { cursor: pointer; }
+.grid tbody tr.is-open td { background: var(--accent-50); }
+.grid .nm { font-weight: 500; color: var(--ink); }
+.grid .nm small { display: block; font-weight: 400; font-size: 12px; color: var(--ink-40); margin-top: 1px; }
+.grid .cat { color: var(--ink-60); white-space: nowrap; }
+.grid .cat .sub { color: var(--ink-40); }
+.grid .city { color: var(--ink-60); white-space: nowrap; }
+.grid td.right { white-space: nowrap; }
+.grid .tag { white-space: nowrap; }
+.grid .tag.warn { background: #fff4e5; color: #9a5b00; border-color: rgba(154,91,0,.16); }
+
+.more { display: flex; justify-content: center; padding: 18px 0 6px; }
+
+/* ---------- editor ---------- */
+.editor { margin-bottom: 18px; scroll-margin-top: 84px; }   /* clear the sticky bar */
+.editor .card-head h3 { font-size: 18px; }
+.row3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 16px; }
+.f textarea.short { min-height: 58px; }
+.f .coords { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.f .coords a { font-size: 12.5px; color: var(--accent-600); }
+.section {
+  margin: 22px 0 2px; font-size: 11px; font-weight: 600; color: var(--ink-40);
+  text-transform: uppercase; letter-spacing: .09em;
+  border-top: 1px solid var(--line-soft); padding-top: 16px;
+}
+.section:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+
+@media (max-width: 720px) {
+  .row3 { grid-template-columns: 1fr; }
+  .grid .cat, .grid .city { white-space: normal; }
+  .grid th:nth-child(3), .grid td:nth-child(3) { display: none; }
+}
+</style>
+</head>
+
+<body>
+
+<div class="bar">
+  <img class="brand" src="logo.png" alt="NeighborHealth" width="543" height="90">
+  <div>
+    <h1>All resources</h1>
+    <div class="sub">every pin on the map</div>
+  </div>
+  <div class="spacer"></div>
+  <span class="who" id="rsWho"></span>
+  <a class="btn ghost" id="rsReview" href="review.html" hidden>Listings</a>
+  <a class="btn ghost" id="rsTeam" href="team-edit.html" hidden>Team page</a>
+  <a class="btn ghost" id="rsUsers" href="users.html" hidden>Accounts</a>
+  <button class="btn ghost" id="rsRefresh" type="button" hidden>Reload</button>
+  <button class="btn ghost" id="rsOut" type="button" hidden>Sign out</button>
+</div>
+
+<div class="wrap">
+  <div class="state" id="rsState"><h2>Loading…</h2></div>
+
+  <div class="tools" id="rsTools" hidden>
+    <label class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input id="rsQ" type="search" placeholder="Search name, city, ZIP or category" autocomplete="off">
+    </label>
+    <select id="rsGroup" aria-label="Category"><option value="">All categories</option></select>
+    <select id="rsStatus" aria-label="Status">
+      <option value="">All rows</option>
+      <option value="on">On the map</option>
+      <option value="off">Hidden</option>
+      <option value="nocoords">Missing coordinates</option>
+    </select>
+    <span class="count" id="rsCount"></span>
+    <button class="btn" id="rsAdd" type="button">Add a resource</button>
+  </div>
+
+  <div id="rsEditor"></div>
+
+  <div class="card list" id="rsListCard" hidden>
+    <table class="grid" id="rsTable">
+      <thead><tr><th>Name</th><th>Category</th><th>City</th><th>Status</th><th class="right"></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="more" id="rsMore" hidden><button class="btn ghost" type="button">Show more</button></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var CFG = window.RS_CONFIG;
+  var esc = NHUI.esc;
+
+  // The category picker writes these names. The map shows the sheet's older
+  // spellings ("Older Adults", "Addiction & Recovery") under the new labels as
+  // well, so an existing row keeps its value until somebody actually changes
+  // the category — no silent rewrite of hundreds of rows on save.
+  var GROUPS = ['Recovery Services', 'Health', 'Senior Services', 'Shelter & Housing',
+                'Food & Basic Needs', 'Community Services', 'Mental Health',
+                'Medication Assisted Treatment (MAT)'];
+  var GROUP_ALIASES = { 'Older Adults': 'Senior Services', 'Addiction & Recovery': 'Recovery Services' };
+  var CONFIDENCE = ['high', 'low', 'parsed', 'assumed', 'submitted', 'editor'];
+
+  // Which control each known column gets. Anything not listed is a text box.
+  var LONG  = ['hours', 'eligibility', 'notes', 'intake', 'gender_note', 'age_note'];
+  var LAYOUT = [
+    ['section', 'The listing'],
+    ['name'],
+    ['category'],                       // group + type
+    ['street'],
+    ['city', 'state', 'zip'],
+    ['phone', 'website'],
+    ['hours'],
+    ['section', 'Who it is for'],
+    ['eligibility'],
+    ['gender_served', 'age_served'],
+    ['gender_note', 'age_note'],
+    ['languages', 'beds'],
+    ['intake'],
+    ['notes'],
+    ['section', 'On the map'],
+    ['latlng'],                         // lat + lng + finder
+    ['active', 'confidence'],
+    ['source_url']
+  ];
+
+  var head = [], rows = [], keys = [];   // keys[i] = fold(head[i])
+  var shown = CFG.PAGE;
+  var openRow = -1;                      // index into rows of the card being edited, -2 = new
+
+  var el = {
+    state:    document.getElementById('rsState'),
+    tools:    document.getElementById('rsTools'),
+    q:        document.getElementById('rsQ'),
+    group:    document.getElementById('rsGroup'),
+    status:   document.getElementById('rsStatus'),
+    count:    document.getElementById('rsCount'),
+    add:      document.getElementById('rsAdd'),
+    editor:   document.getElementById('rsEditor'),
+    listCard: document.getElementById('rsListCard'),
+    tbody:    document.querySelector('#rsTable tbody'),
+    more:     document.getElementById('rsMore'),
+    who:      document.getElementById('rsWho'),
+    review:   document.getElementById('rsReview'),
+    team:     document.getElementById('rsTeam'),
+    users:    document.getElementById('rsUsers'),
+    out:      document.getElementById('rsOut'),
+    refresh:  document.getElementById('rsRefresh')
+  };
+
+  function fold(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+  function groupLabel(g) { return GROUP_ALIASES[g] || g; }
+
+  function state(title, body, btn, onBtn) {
+    el.tools.hidden = true;
+    el.listCard.hidden = true;
+    el.editor.innerHTML = '';
+    NHUI.state(el.state, title, body, btn, onBtn);
+  }
+
+  function trouble(err) {
+    if (err.auth) { chrome(false); start(); return; }
+    state('Something went wrong', err.message, 'Try again', load);
+  }
+
+  function chrome(on) {
+    el.who.textContent = on && NH.user ? NH.user.name + ' · ' + NH.user.role : '';
+    el.review.hidden = el.team.hidden = el.out.hidden = el.refresh.hidden = !on;
+    // The link is a convenience, not a gate — users.html and the api both
+    // check the role themselves.
+    el.users.hidden = !(on && NH.user && NH.user.role === 'admin');
+  }
+
+  function start() {
+    NH.configure({ url: (window.NH_CONFIG_API || {}).API_URL });
+    NHUI.gate(el.state, {
+      title: 'All resources',
+      blurb: 'Sign in with the username you were given.'
+    }, function () {
+      chrome(true);
+      load();
+    });
+  }
+
+  el.out.addEventListener('click', function () {
+    NH.logout().then(function () { chrome(false); start(); });
+  });
+  el.refresh.addEventListener('click', function () { load(); });
+
+  // ----------------------------------------------------------------- load
+  function load() {
+    state('Loading the list…', 'This is every row on the sheet, so it takes a moment.');
+    NH.call('resources.list')
+      .then(function (j) {
+        head = j.head;
+        keys = head.map(fold);
+        rows = j.rows;
+        openRow = -1;
+        shown = CFG.PAGE;
+        fillGroups();
+        render();
+      })
+      .catch(trouble);
+  }
+
+  function col(key) { return keys.indexOf(fold(key)); }
+  function cell(row, key) {
+    var i = col(key);
+    return i > -1 ? String(row[i] == null ? '' : row[i]).trim() : '';
+  }
+  function splitCat(row) {
+    var parts = cell(row, 'category').split(' / ');
+    return { group: (parts[0] || '').trim(), type: parts.slice(1).join(' / ').trim() };
+  }
+  function padZip(z) {
+    z = String(z || '').trim();
+    return /^\d{1,4}$/.test(z) ? ('00000' + z).slice(-5) : z;
+  }
+  function hasCoords(row) {
+    return isFinite(parseFloat(cell(row, 'lat'))) && isFinite(parseFloat(cell(row, 'lng')));
+  }
+  function isOff(row) { return cell(row, 'active').toUpperCase() === 'FALSE'; }
+
+  // Values actually present in the data, so the type and "serves" fields can
+  // offer what is already in use instead of inviting a fourth spelling.
+  function distinct(fn) {
+    var seen = {}, out = [];
+    rows.forEach(function (r) {
+      var v = fn(r);
+      if (v && !seen[v]) { seen[v] = 1; out.push(v); }
+    });
+    return out.sort(function (a, b) { return a.localeCompare(b); });
+  }
+
+  function fillGroups() {
+    var groups = distinct(function (r) { return splitCat(r).group; });
+    el.group.innerHTML = '<option value="">All categories</option>' + groups.map(function (g) {
+      return '<option value="' + esc(g) + '">' + esc(groupLabel(g)) + '</option>';
+    }).join('');
+  }
+
+  // --------------------------------------------------------------- filter
+  function matches(row) {
+    var q = fold(el.q.value);
+    var g = el.group.value;
+    var st = el.status.value;
+    if (g && splitCat(row).group !== g) return false;
+    if (st === 'on' && isOff(row)) return false;
+    if (st === 'off' && !isOff(row)) return false;
+    if (st === 'nocoords' && hasCoords(row)) return false;
+    if (q) {
+      var hay = fold([cell(row, 'name'), cell(row, 'city'), cell(row, 'category'),
+                      groupLabel(splitCat(row).group), padZip(cell(row, 'zip')),
+                      cell(row, 'street')].join(' '));
+      if (hay.indexOf(q) === -1) return false;
+    }
+    return true;
+  }
+
+  function render() {
+    el.state.hidden = true;
+    el.tools.hidden = false;
+    el.listCard.hidden = false;
+
+    var hits = [];
+    rows.forEach(function (r, i) { if (matches(r)) hits.push(i); });
+    el.count.textContent = hits.length === rows.length
+      ? rows.length + ' resources'
+      : hits.length + ' of ' + rows.length;
+
+    el.tbody.innerHTML = hits.slice(0, shown).map(line).join('') ||
+      '<tr><td colspan="5" class="muted" style="padding:26px 0">Nothing matches. Try fewer words, or clear a filter.</td></tr>';
+    el.more.hidden = hits.length <= shown;
+    if (!el.more.hidden) {
+      el.more.querySelector('button').textContent = 'Show ' + Math.min(CFG.PAGE, hits.length - shown) + ' more';
+    }
+  }
+
+  function line(i) {
+    var r = rows[i];
+    var c = splitCat(r);
+    var off = isOff(r), nocoords = !hasCoords(r);
+    return '<tr data-i="' + i + '"' + (i === openRow ? ' class="is-open"' : '') + '>' +
+      '<td class="nm">' + esc(cell(r, 'name') || '(no name)') +
+        '<small>' + esc([cell(r, 'street'), padZip(cell(r, 'zip'))].filter(Boolean).join(' · ')) + '</small></td>' +
+      '<td class="cat">' + esc(groupLabel(c.group) || '—') +
+        (c.type ? ' <span class="sub">/ ' + esc(c.type) + '</span>' : '') + '</td>' +
+      '<td class="city">' + esc(cell(r, 'city')) + '</td>' +
+      '<td>' + (off ? '<span class="tag off">Hidden</span>'
+                    : nocoords ? '<span class="tag warn">No pin</span>'
+                    : '<span class="tag">On map</span>') + '</td>' +
+      '<td class="right"><button class="btn ghost sm" type="button">Edit</button></td>' +
+    '</tr>';
+  }
+
+  el.q.addEventListener('input', function () { shown = CFG.PAGE; render(); });
+  el.group.addEventListener('change', function () { shown = CFG.PAGE; render(); });
+  el.status.addEventListener('change', function () { shown = CFG.PAGE; render(); });
+  el.more.querySelector('button').addEventListener('click', function () { shown += CFG.PAGE; render(); });
+
+  el.tbody.addEventListener('click', function (e) {
+    var tr = e.target.closest('tr[data-i]');
+    if (!tr) return;
+    openEditor(Number(tr.dataset.i));
+  });
+
+  el.add.addEventListener('click', function () { openEditor(-2); });
+
+  // --------------------------------------------------------------- editor
+  //
+  // One card, above the list, for whichever row is open. Built from the header
+  // so a new column on the sheet gets a field without a code change.
+  function openEditor(i) {
+    openRow = i;
+    var row = i >= 0 ? rows[i] : head.map(function () { return ''; });
+    var isNew = i < 0;
+    var cat = splitCat(row);
+    var rawGroup = cat.group;
+    var covered = {};                    // columns the layout placed
+    var typeList = distinct(function (r) { return splitCat(r).type; });
+    var genderList = distinct(function (r) { return cell(r, 'gender_served'); });
+    var ageList = distinct(function (r) { return cell(r, 'age_served'); });
+
+    function field(key, label, inner) {
+      covered[fold(key)] = 1;
+      return '<div class="f"><label>' + esc(label) + '</label>' + inner + '</div>';
+    }
+    function text(key, label, extra) {
+      if (col(key) < 0) return '';
+      return field(key, label, '<input type="text" data-k="' + esc(fold(key)) + '" value="' +
+                               esc(key === 'zip' ? padZip(cell(row, key)) : cell(row, key)) + '"' + (extra || '') + '>');
+    }
+    function area(key, label) {
+      if (col(key) < 0) return '';
+      return field(key, label, '<textarea data-k="' + esc(fold(key)) + '"' +
+                               (LONG.indexOf(key) > -1 && key !== 'notes' ? ' class="short"' : '') + '>' +
+                               esc(cell(row, key)) + '</textarea>');
+    }
+    function pick(key, label, opts, cur) {
+      if (col(key) < 0) return '';
+      var seen = false;
+      var o = opts.map(function (v) {
+        var on = v === cur; seen = seen || on;
+        return '<option value="' + esc(v) + '"' + (on ? ' selected' : '') + '>' + esc(v) + '</option>';
+      });
+      // A value already on the sheet that is not in the list stays offered, so
+      // opening a row and saving it never changes something you did not touch.
+      if (cur && !seen) o.unshift('<option value="' + esc(cur) + '" selected>' + esc(cur) + '</option>');
+      return field(key, label, '<select data-k="' + esc(fold(key)) + '">' + o.join('') + '</select>');
+    }
+    function pretty(h) {
+      return h.replace(/_/g, ' ').replace(/\b\w/g, function (m) { return m.toUpperCase(); });
+    }
+
+    var parts = LAYOUT.map(function (line) {
+      if (line[0] === 'section') return '<div class="section">' + esc(line[1]) + '</div>';
+
+      var cells = line.map(function (k) {
+        switch (k) {
+          case 'name':      return text('name', 'Name', ' required');
+          case 'street':    return text('street', 'Street address');
+          case 'city':      return text('city', 'City or town');
+          case 'state':     return text('state', 'State');
+          case 'zip':       return text('zip', 'ZIP', ' inputmode="numeric"');
+          case 'phone':     return text('phone', 'Phone', ' inputmode="tel"');
+          case 'website':   return text('website', 'Website', ' inputmode="url"');
+          case 'source_url':return text('source_url', 'Source (where this information came from)', ' inputmode="url"');
+          case 'languages': return text('languages', 'Languages');
+          case 'beds':      return text('beds', 'Beds');
+          case 'hours':     return area('hours', 'Hours');
+          case 'eligibility': return area('eligibility', 'Eligibility');
+          case 'notes':     return area('notes', 'Notes shown on the card');
+          case 'intake':    return area('intake', 'How to get in (intake)');
+          case 'gender_note': return area('gender_note', 'Note on gender');
+          case 'age_note':  return area('age_note', 'Note on age');
+          case 'gender_served':
+            if (col(k) < 0) return '';
+            return field(k, 'Gender served (blank = no restriction)',
+              '<input type="text" data-k="gender served" list="rsGenders" value="' + esc(cell(row, k)) + '">' +
+              '<datalist id="rsGenders">' + genderList.map(function (v) { return '<option value="' + esc(v) + '">'; }).join('') + '</datalist>');
+          case 'age_served':
+            if (col(k) < 0) return '';
+            return field(k, 'Age served (blank = no restriction)',
+              '<input type="text" data-k="age served" list="rsAges" value="' + esc(cell(row, k)) + '">' +
+              '<datalist id="rsAges">' + ageList.map(function (v) { return '<option value="' + esc(v) + '">'; }).join('') + '</datalist>');
+          case 'active':
+            if (col(k) < 0) return '';
+            covered.active = 1;
+            return '<div class="f"><label>On the map</label><select data-k="active">' +
+              '<option value="TRUE"' + (isOff(row) ? '' : ' selected') + '>Showing</option>' +
+              '<option value="FALSE"' + (isOff(row) ? ' selected' : '') + '>Hidden</option></select></div>';
+          case 'confidence':
+            return pick('confidence', 'Confidence', CONFIDENCE, cell(row, 'confidence') || (isNew ? 'editor' : ''));
+          case 'category': {
+            if (col('category') < 0) return '';
+            covered.category = 1;
+            var sel = groupLabel(rawGroup);
+            var opts = GROUPS.slice();
+            if (sel && opts.indexOf(sel) === -1) opts.unshift(sel);
+            return '<div class="row2">' +
+              '<div class="f"><label>Category</label><select id="rsG">' +
+                (isNew ? '<option value="">Choose…</option>' : '') +
+                opts.map(function (g) {
+                  return '<option value="' + esc(g) + '"' + (g === sel ? ' selected' : '') + '>' + esc(g) + '</option>';
+                }).join('') + '</select></div>' +
+              '<div class="f"><label>Service type</label>' +
+                '<input type="text" id="rsT" list="rsTypes" value="' + esc(cat.type) + '" placeholder="e.g. Food Pantry">' +
+                '<datalist id="rsTypes">' + typeList.map(function (v) { return '<option value="' + esc(v) + '">'; }).join('') + '</datalist>' +
+              '</div></div>';
+          }
+          case 'latlng': {
+            if (col('lat') < 0 || col('lng') < 0) return '';
+            covered.lat = covered.lng = 1;
+            var lat = cell(row, 'lat'), lng = cell(row, 'lng');
+            return '<div class="f"><label>Pin location</label>' +
+              '<div class="row2">' +
+                '<input type="text" data-k="lat" inputmode="decimal" placeholder="Latitude" value="' + esc(lat) + '">' +
+                '<input type="text" data-k="lng" inputmode="decimal" placeholder="Longitude" value="' + esc(lng) + '">' +
+              '</div>' +
+              '<div class="coords">' +
+                '<button class="btn ghost sm" type="button" data-act="geocode">Find from the address</button>' +
+                '<a id="rsCheck" href="#" target="_blank" rel="noopener"' + (lat && lng ? '' : ' hidden') + '>Check on a map</a>' +
+                '<span class="hint" id="rsGeoHint"></span>' +
+              '</div>' +
+              '<div class="hint">A row without coordinates is kept on the sheet but does not get a pin.</div>' +
+            '</div>';
+          }
+        }
+        return '';
+      }).filter(Boolean);
+
+      if (!cells.length) return '';
+      if (cells.length === 1) return cells[0];
+      return '<div class="' + (cells.length === 3 ? 'row3' : 'row2') + '">' + cells.join('') + '</div>';
+    }).join('');
+
+    // Anything on the sheet the layout above did not place.
+    var extra = head.filter(function (h, i) { return h && !covered[keys[i]]; });
+    if (extra.length) {
+      parts += '<div class="section">Other columns</div><div class="row2">' +
+        extra.map(function (h) { return text(h, pretty(h)); }).join('') + '</div>';
+    }
+
+    var c = document.createElement('div');
+    c.className = 'card editor';
+    c.innerHTML =
+      '<div class="card-head">' +
+        '<h3>' + esc(isNew ? 'New resource' : (cell(row, 'name') || '(no name)')) + '</h3>' +
+        (isNew ? '<span class="pill">Not saved yet</span>' : '<span class="when">row ' + (i + 2) + '</span>') +
+      '</div>' +
+      parts +
+      '<div class="acts">' +
+        '<button class="btn go" type="button" data-act="save">' + (isNew ? 'Add to the map' : 'Save') + '</button>' +
+        '<button class="btn ghost" type="button" data-act="close">' + (isNew ? 'Cancel' : 'Close') + '</button>' +
+        (isNew ? '' : '<button class="btn stop sm" type="button" data-act="del">Delete</button>') +
+        '<span class="note"></span>' +
+      '</div>';
+
+    el.editor.innerHTML = '';
+    el.editor.appendChild(c);
+    render();                                    // marks the open row
+    c.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(function () { var f = c.querySelector('[data-k="name"]'); if (f && isNew) f.focus(); }, 60);
+
+    var note = c.querySelector('.note');
+    var gSel = c.querySelector('#rsG'), tIn = c.querySelector('#rsT');
+    var latIn = c.querySelector('[data-k="lat"]'), lngIn = c.querySelector('[data-k="lng"]');
+    var check = c.querySelector('#rsCheck'), geoHint = c.querySelector('#rsGeoHint');
+
+    function busy(on) { c.classList.toggle('is-busy', !!on); }
+    function say(msg, kind) { note.textContent = msg || ''; note.className = 'note' + (kind ? ' ' + kind : ''); }
+    function fail(err) {
+      if (err.auth) return trouble(err);
+      busy(false);
+      say(err.message || String(err), 'bad');
+    }
+
+    function updateCheck() {
+      if (!check) return;
+      var la = parseFloat(latIn.value), ln = parseFloat(lngIn.value);
+      var ok = isFinite(la) && isFinite(ln);
+      check.hidden = !ok;
+      if (ok) check.href = 'https://www.openstreetmap.org/?mlat=' + la + '&mlon=' + ln + '#map=17/' + la + '/' + ln;
+    }
+    if (latIn) { latIn.addEventListener('input', updateCheck); lngIn.addEventListener('input', updateCheck); updateCheck(); }
+
+    function addressOf() {
+      var v = function (k) { var f = c.querySelector('[data-k="' + k + '"]'); return f ? f.value.trim() : ''; };
+      return [v('street'), v('city'), ((v('state') || 'MA') + ' ' + padZip(v('zip'))).trim()].filter(Boolean).join(', ');
+    }
+
+    function values() {
+      var v = {};
+      c.querySelectorAll('[data-k]').forEach(function (f) { v[f.dataset.k] = f.value.trim(); });
+      if (v.zip !== undefined) v.zip = padZip(v.zip);
+      if (gSel) {
+        // Keep the sheet's own spelling unless the category was actually changed.
+        var g = gSel.value === groupLabel(rawGroup) ? rawGroup : gSel.value;
+        var t = tIn.value.trim();
+        v.category = [g, t].filter(Boolean).join(' / ');
+      }
+      return v;
+    }
+
+    function geocode() {
+      var addr = addressOf();
+      if (!addr) { geoHint.textContent = 'Fill in a street and a town first.'; geoHint.className = 'hint bad'; return Promise.resolve(null); }
+      geoHint.textContent = 'Looking up…'; geoHint.className = 'hint';
+      return lookup(addr).then(function (pt) {
+        if (!pt) {
+          geoHint.textContent = 'No match for that address. A street number and a town usually fixes it.';
+          geoHint.className = 'hint bad';
+          return null;
+        }
+        latIn.value = pt.lat; lngIn.value = pt.lng;
+        updateCheck();
+        geoHint.textContent = 'Found. Check it on the map before saving.';
+        geoHint.className = 'hint';
+        return pt;
+      });
+    }
+
+    c.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-act]');
+      if (!b) return;
+      var act = b.dataset.act;
+
+      if (act === 'close') { closeEditor(); return; }
+      if (act === 'geocode') { busy(true); geocode().then(function () { busy(false); }); return; }
+
+      if (act === 'save') {
+        var nameF = c.querySelector('[data-k="name"]');
+        if (nameF && !nameF.value.trim()) { say('A resource needs a name.', 'bad'); nameF.focus(); return; }
+        if (gSel && !gSel.value) { say('Pick a category.', 'bad'); gSel.focus(); return; }
+
+        busy(true);
+        say('Saving…');
+        // No coordinates yet but an address to try: look it up first, so a new
+        // listing lands on the map instead of silently having no pin.
+        var pre = (latIn && !isFinite(parseFloat(latIn.value)) && addressOf()) ? geocode() : Promise.resolve(null);
+        pre.then(function () {
+          var v = values();
+          if (isNew) {
+            return NH.call('resources.add', { values: v }).then(function (j) {
+              rows.push(j.values);
+              fillGroups();
+              openRow = rows.length - 1;
+              say('Added. It reaches the public map in about five minutes.', 'ok');
+              busy(false);
+              closeEditor();
+            });
+          }
+          return NH.call('resources.save', { row: i + 2, expect: cell(rows[i], 'name'), values: v }).then(function (j) {
+            rows[i] = j.values;
+            fillGroups();
+            busy(false);
+            say('Saved. The public map picks it up in about five minutes.', 'ok');
+            c.querySelector('h3').textContent = cell(rows[i], 'name') || '(no name)';
+            render();
+          });
+        }).catch(fail);
+        return;
+      }
+
+      // Two taps, not a browser confirm(): the first turns the button into the
+      // warning and the second does it, so a mis-click costs nothing.
+      if (act === 'del') {
+        if (b.dataset.armed !== '1') {
+          b.dataset.armed = '1';
+          b.textContent = 'Really delete?';
+          say('This removes the row from the sheet and the pin from the map. Click again to confirm.', 'bad');
+          setTimeout(function () {
+            if (b.dataset.armed === '1') { b.dataset.armed = ''; b.textContent = 'Delete'; say(''); }
+          }, 6000);
+          return;
+        }
+        busy(true);
+        say('Deleting…');
+        // Reload afterwards: every row number below this one just moved.
+        NH.call('resources.delete', { row: i + 2, expect: cell(rows[i], 'name') })
+          .then(function () { load(); })
+          .catch(fail);
+      }
+    });
+  }
+
+  function closeEditor() {
+    openRow = -1;
+    el.editor.innerHTML = '';
+    render();
+  }
+
+  // Nominatim, bounded to Massachusetts, same as the map's address search.
+  function lookup(addr) {
+    var u = CFG.GEOCODE_URL + '?format=json&limit=1&countrycodes=us&bounded=1' +
+            '&viewbox=' + encodeURIComponent(CFG.VIEWBOX) +
+            '&q=' + encodeURIComponent(addr);
+    return fetch(u, { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (j) {
+        if (!j || !j.length) return null;
+        var lat = parseFloat(j[0].lat), lng = parseFloat(j[0].lon);
+        return isFinite(lat) && isFinite(lng) ? { lat: lat, lng: lng } : null;
+      })
+      .catch(function () { return null; });
+  }
+
+  start();
+})();
+</script>
+
+</body>
+</html>

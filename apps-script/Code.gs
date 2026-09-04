@@ -11,8 +11,8 @@
  *                    the row lands on the Submissions tab, pending. No login.
  *   2. Accounts    — usernames and passwords kept on a Users tab, checked here.
  *                    Nobody needs a Google account.
- *   3. Editing     — the review queue and the team page, gated on a session
- *                    token this script issued.
+ *   3. Editing     — the review queue, the team page and the live resource
+ *                    list itself, gated on a session token this script issued.
  *
  * ---------------------------------------------------------------------------
  * SETUP
@@ -121,6 +121,11 @@ function route(req) {
 
     case 'queue.list':    return actQueueList();
     case 'queue.decide':  return actQueueDecide(user, req);
+
+    case 'resources.list':   return actResList();
+    case 'resources.save':   return actResSave(req);
+    case 'resources.add':    return actResAdd(req);
+    case 'resources.delete': return actResDelete(req);
 
     case 'users.list':    return needAdmin(user) || actUsersList();
     case 'users.save':    return needAdmin(user) || actUsersSave(user, req);
@@ -446,6 +451,119 @@ function appendLive(rec, lat, lng) {
     confidence:    'submitted',
     active:        'TRUE'
   }));
+}
+
+// ------------------------------------------------------------- resources
+//
+// The live tab the map publishes, edited in place from resources.html. Unlike
+// the queue nothing here is staged: a save is on the public map as soon as
+// Google's published-CSV cache turns over, about five minutes.
+//
+// Row numbers are the handle, as on the team page, so the page reloads after a
+// delete. On top of that every save and delete carries `expect`, the name the
+// page believes is on that row: if someone else deleted a row above it in the
+// meantime the numbers have shifted, and the write is refused rather than
+// landing on a different organisation.
+
+function liveTab() {
+  var live = book().getSheetByName(LIVE_TAB);
+  if (!live) throw new Error('No tab named ' + LIVE_TAB);
+  return live;
+}
+
+function actResList() {
+  var live = liveTab();
+  return { ok: true, head: headerOf(live), rows: dataOf(live) };
+}
+
+function actResSave(req) {
+  var live = liveTab();
+  var head = headerOf(live);
+  var row = Number(req.row);
+  if (!(row >= 2) || row > live.getLastRow()) return { ok: false, error: 'No such row.' };
+
+  var current = live.getRange(row, 1, 1, head.length).getValues()[0];
+  var shifted = rowShifted(head, current, req.expect);
+  if (shifted) return shifted;
+
+  var vals = mergeValues(head, current, req.values);
+  if (!str(vals[colOf(head, 'name')])) return { ok: false, error: 'A resource needs a name.' };
+  writeLiveRow(live, head, row, vals);
+  return { ok: true, values: vals };
+}
+
+function actResAdd(req) {
+  var live = liveTab();
+  var head = headerOf(live);
+  var blank = head.map(function () { return ''; });
+  var given = Object.assign({ active: 'TRUE', confidence: 'editor' }, req.values || {});
+  var vals = mergeValues(head, blank, given);
+  if (!str(vals[colOf(head, 'name')])) return { ok: false, error: 'A resource needs a name.' };
+
+  live.appendRow(vals);
+  var row = live.getLastRow();
+  writeLiveRow(live, head, row, vals);           // re-write so zip keeps its leading zero
+  return { ok: true, row: row, values: vals };
+}
+
+function actResDelete(req) {
+  var live = liveTab();
+  var head = headerOf(live);
+  var row = Number(req.row);
+  if (!(row >= 2) || row > live.getLastRow()) return { ok: false, error: 'No such row.' };
+
+  var current = live.getRange(row, 1, 1, head.length).getValues()[0];
+  var shifted = rowShifted(head, current, req.expect);
+  if (shifted) return shifted;
+
+  live.deleteRow(row);
+  return { ok: true };
+}
+
+/**
+ * Anything in a column the page does not know about is written back
+ * untouched, same rule as the team page. Keys arrive folded (lower case,
+ * punctuation collapsed to spaces) so `gender_served` and `Gender Served`
+ * are the same column.
+ */
+function mergeValues(head, current, values) {
+  values = values || {};
+  return head.map(function (h, i) {
+    var k = fold(h);
+    return Object.prototype.hasOwnProperty.call(values, k) ? values[k] : current[i];
+  });
+}
+
+function rowShifted(head, current, expect) {
+  if (expect == null) return null;
+  var c = colOf(head, 'name');
+  if (c < 0) return null;
+  if (str(current[c]) === str(expect)) return null;
+  return { ok: false, error: 'That row has changed since the list loaded (it now reads "' +
+                             str(current[c]) + '"). Reload and try again.' };
+}
+
+/**
+ * Sheets turns a ZIP like 02118 into the number 2118 the moment it is written
+ * into an automatically formatted cell — the same trap the import notes warn
+ * about. Formatting the zip cell as text first keeps the zero. lat and lng go
+ * in as numbers so the map's parseFloat has nothing to guess at.
+ */
+function writeLiveRow(live, head, row, vals) {
+  var zc = colOf(head, 'zip');
+  if (zc > -1) {
+    live.getRange(row, zc + 1).setNumberFormat('@');
+    var z = str(vals[zc]);
+    if (/^\d{1,4}$/.test(z)) z = ('00000' + z).slice(-5);
+    vals[zc] = z;
+  }
+  ['lat', 'lng'].forEach(function (k) {
+    var c = colOf(head, k);
+    if (c < 0) return;
+    var n = parseFloat(vals[c]);
+    vals[c] = isFinite(n) ? n : '';
+  });
+  live.getRange(row, 1, 1, vals.length).setValues([vals]);
 }
 
 // -------------------------------------------------------------- sessions

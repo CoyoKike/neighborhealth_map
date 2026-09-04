@@ -10,13 +10,14 @@ WordPress via an iframe.
 | `index.html` | the resource map |
 | `team.html` | the "Our People" grid, rendered from the Team tab |
 | `review.html` | queue for approving submitted listings |
+| `resources.html` | every row on the map: search, edit, add, delete |
 | `team-edit.html` | editor for the team cards, with photo upload |
 | `users.html` | who can sign in |
 | `apps-script/Code.gs` | the back end: intake, accounts, and every edit |
 | `config.js` | one setting — the api url |
-| `api.js`, `signin.js`, `editor.css` | shared by the three signed-in pages |
+| `api.js`, `signin.js`, `editor.css` | shared by the four signed-in pages |
 
-The three signed-in pages have no access to the spreadsheet of their own. They
+The four signed-in pages have no access to the spreadsheet of their own. They
 post actions to the Apps Script web app, which checks a username and password
 against a Users tab and decides what each session may do. Nobody needs a Google
 account. Setup is in `apps-script/README.md`; the reasoning is in `NOTES.md`

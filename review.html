@@ -44,6 +44,7 @@ window.RV_CONFIG = {
   </div>
   <div class="spacer"></div>
   <span class="who" id="rvWho"></span>
+  <a class="btn ghost" id="rvRes" href="resources.html" hidden>All resources</a>
   <a class="btn ghost" id="rvTeam" href="team-edit.html" hidden>Team page</a>
   <a class="btn ghost" id="rvUsers" href="users.html" hidden>Accounts</a>
   <button class="btn ghost" id="rvRefresh" type="button" hidden>Refresh</button>
@@ -68,6 +69,7 @@ window.RV_CONFIG = {
     queue:   document.getElementById('rvQueue'),
     who:     document.getElementById('rvWho'),
     team:    document.getElementById('rvTeam'),
+    res:     document.getElementById('rvRes'),
     users:   document.getElementById('rvUsers'),
     out:     document.getElementById('rvOut'),
     refresh: document.getElementById('rvRefresh'),
@@ -89,7 +91,7 @@ window.RV_CONFIG = {
 
   function chrome(on) {
     el.who.textContent = on && NH.user ? NH.user.name + ' · ' + NH.user.role : '';
-    el.team.hidden = el.out.hidden = el.refresh.hidden = !on;
+    el.team.hidden = el.res.hidden = el.out.hidden = el.refresh.hidden = !on;
     // The link is a convenience, not a gate — users.html and the api both
     // check the role themselves.
     el.users.hidden = !(on && NH.user && NH.user.role === 'admin');

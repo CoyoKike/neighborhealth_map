@@ -78,7 +78,7 @@ SUBMIT_URL: 'https://script.google.com/macros/s/AKfy…/exec'
 ```
 
 Commit, push. The **List your organization** button appears on the map, and
-`review.html`, `team-edit.html` and `users.html` come to life.
+`review.html`, `resources.html`, `team-edit.html` and `users.html` come to life.
 
 ## The actions
 
@@ -89,6 +89,7 @@ Commit, push. The **List your organization** button appears on the map, and
 | `logout`, `session`, `me.password` | yes | the signed-in person's own account |
 | `team.list/save/add/move/photo/delete` | yes | the staff cards |
 | `queue.list/decide` | yes | the review queue; approving appends to the live tab |
+| `resources.list/save/add/delete` | yes | the live Resources tab, edited in place from resources.html |
 | `users.list/save` | admin | accounts |
 
 ## Accounts

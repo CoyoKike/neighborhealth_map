@@ -92,6 +92,7 @@
   <div class="spacer"></div>
   <span class="who" id="teWho"></span>
   <a class="btn ghost" id="teReview" href="review.html" hidden>Listings</a>
+  <a class="btn ghost" id="teRes" href="resources.html" hidden>All resources</a>
   <a class="btn ghost" id="teUsers" href="users.html" hidden>Accounts</a>
   <button class="btn ghost" id="teRefresh" type="button" hidden>Reload</button>
   <button class="btn ghost" id="teOut" type="button" hidden>Sign out</button>
@@ -128,6 +129,7 @@
     list:    document.getElementById('teList'),
     who:     document.getElementById('teWho'),
     review:  document.getElementById('teReview'),
+    res:     document.getElementById('teRes'),
     users:   document.getElementById('teUsers'),
     out:     document.getElementById('teOut'),
     refresh: document.getElementById('teRefresh'),
@@ -148,7 +150,7 @@
 
   function chrome(on) {
     el.who.textContent = on && NH.user ? NH.user.name + ' · ' + NH.user.role : '';
-    el.review.hidden = el.out.hidden = el.refresh.hidden = !on;
+    el.review.hidden = el.res.hidden = el.out.hidden = el.refresh.hidden = !on;
     // The link is a convenience, not a gate — users.html and the api both
     // check the role themselves.
     el.users.hidden = !(on && NH.user && NH.user.role === 'admin');
