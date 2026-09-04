@@ -652,7 +652,7 @@ body.nh-standalone > .nh { height: 100%; }
   // The pale brand tints (Sky, Liliac, Pale Pink, Ivory) are left out — a pin
   // that light disappears on the basemap.
   var GROUP_COLORS = {
-    'Addiction & Recovery':                '#6a4fa3',  // the original violet, kept by request
+    'Recovery Services':                   '#6a4fa3',  // the original violet, kept by request
     'Health':                              '#1e64af',  // Cobalt
     'Senior Services':                     '#50a7ef',  // Warm Blue
     'Shelter & Housing':                   '#fe8979',  // Salmon
@@ -663,11 +663,12 @@ body.nh-standalone > .nh { height: 100%; }
   };
   var colorFor = function (g) { return GROUP_COLORS[g] || '#5a6672'; };
 
-  // The sheet still says "Older Adults" on every Council on Aging row; the map
-  // shows it as "Senior Services". Renaming here means nobody has to edit
-  // hundreds of rows, and the submission form (which lists GROUP_COLORS keys)
-  // writes the new name from now on. Both spellings land in the same group.
-  var GROUP_ALIASES = { 'Older Adults': 'Senior Services' };
+  // The sheet still says "Older Adults" and "Addiction & Recovery" on hundreds
+  // of rows; the map shows them as "Senior Services" and "Recovery Services".
+  // Renaming here means nobody has to edit the sheet, and the submission form
+  // (which lists GROUP_COLORS keys) writes the new names from now on. Old and
+  // new spellings land in the same group.
+  var GROUP_ALIASES = { 'Older Adults': 'Senior Services', 'Addiction & Recovery': 'Recovery Services' };
   var groupName = function (g) { return GROUP_ALIASES[g] || g; };
 
   // Cluster bubbles are tinted from the same hex as the pins they swallow, so

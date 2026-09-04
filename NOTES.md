@@ -313,7 +313,7 @@ sees.
 - Passwords are given to people directly. Nothing is emailed, and no account
   is tied to an email address at all.
 
-## 8. Pin colours and the Senior Services rename (2026-09-04)
+## 8. Pin colours and the category renames (2026-09-04)
 
 The team asked for pins that match the brand. `GROUP_COLORS` now uses the
 January 2024 style guide palette, except Recovery, which keeps its original
@@ -322,10 +322,11 @@ violet `#6a4fa3` by request (the brand's Eggplant read too dark). Senior Service
 Periwinkle, Mental Health is Forest, MAT is Charcoal. The pale tints (Sky,
 Liliac, Pale Pink) are deliberately unused — too light for a pin.
 
-**"Older Adults" is now shown as "Senior Services"** without touching the
-sheet. `GROUP_ALIASES` in `index.html` renames the group at load, so the 345
-Council on Aging rows still say `Older Adults / Council on Aging` and render
-fine. The submission form lists `GROUP_COLORS` keys, so new listings arrive
+**"Older Adults" is shown as "Senior Services" and "Addiction & Recovery" as
+"Recovery Services"** without touching the sheet. `GROUP_ALIASES` in
+`index.html` renames the groups at load, so the 345 Council on Aging rows
+still say `Older Adults / Council on Aging`, the 457 recovery rows still say
+`Addiction & Recovery / …`, and both render fine. The submission form lists `GROUP_COLORS` keys, so new listings arrive
 as `Senior Services / …`; both spellings land in the same group. If someone
 later bulk-renames the sheet column, nothing breaks — the alias just stops
 matching anything.
