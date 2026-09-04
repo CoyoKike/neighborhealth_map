@@ -362,3 +362,16 @@ Things worth knowing:
   text before writing, which is the same trap the import notes in section 1
   warn about, fixed at the source.
 - Editors and admins both get the page. Accounts stay admin-only.
+
+## 10. Editing a submission before approving (2026-09-04)
+
+Every field on a pending card in `review.html` is now an input. Approving
+sends the card's values along with the coordinates; `actQueueDecide` writes
+them onto the Submissions row (only the columns in `QUEUE_EDITABLE`, never
+status or the audit columns) and then copies that corrected row to the live
+tab. Reject ignores edits. The separate "address to geocode" box is gone: the
+pin is looked up from the street, city, state and ZIP fields themselves, so
+fixing a bad address also fixes the stored data.
+
+`appendLive` now goes through `writeLiveRow`, so a ZIP arriving as `2119`
+lands on the live tab as text `02119`.

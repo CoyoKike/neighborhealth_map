@@ -69,6 +69,9 @@ var QUEUE_HEADERS = [
   'state', 'zip', 'phone', 'website', 'hours', 'gender_served', 'age_served',
   'notes', 'submitter_name', 'submitter_email', 'decided', 'decided_by'
 ];
+// The columns a reviewer may change on a pending submission before approving.
+var QUEUE_EDITABLE = ['name', 'group', 'type', 'street', 'city', 'state', 'zip', 'phone',
+                      'website', 'hours', 'gender_served', 'age_served', 'notes'];
 var TEAM_HEADERS  = ['name', 'role', 'bio', 'photo', 'icon', 'active'];
 var USERS_HEADERS = ['username', 'display_name', 'role', 'active',
                      'salt', 'hash', 'rounds', 'created', 'last_login'];
@@ -408,12 +411,28 @@ function actQueueDecide(user, req) {
   var row = Number(req.row);
   if (!(row >= 2) || row > q.getLastRow()) return { ok: false, error: 'No such row.' };
 
-  var rec = recordOf(head, q.getRange(row, 1, 1, head.length).getValues()[0]);
+  var current = q.getRange(row, 1, 1, head.length).getValues()[0];
+  var rec = recordOf(head, current);
   if (str(rec.status)) return { ok: false, error: 'That one was already ' + rec.status + '.' };
 
   if (req.decision === 'approved') {
     var lat = Number(req.lat), lng = Number(req.lng);
     if (!isFinite(lat) || !isFinite(lng)) return { ok: false, error: 'No coordinates for that address.' };
+
+    // The reviewer may have corrected the listing on the card. Those edits go
+    // back onto the Submissions row first, so the record of what was approved
+    // matches what went live. Only the listing's own fields can be changed
+    // this way — status, dates and who decided stay the script's business.
+    if (req.values) {
+      var edits = {};
+      QUEUE_EDITABLE.forEach(function (k) {
+        var fk = fold(k);
+        if (Object.prototype.hasOwnProperty.call(req.values, fk)) edits[fk] = req.values[fk];
+      });
+      current = mergeValues(head, current, edits);
+      q.getRange(row, 1, 1, current.length).setValues([current]);
+      rec = recordOf(head, current);
+    }
     appendLive(rec, lat, lng);
   } else if (req.decision !== 'rejected') {
     return { ok: false, error: 'Unknown decision.' };
@@ -431,9 +450,9 @@ function actQueueDecide(user, req) {
  * stay blank; confidence marks these apart from the scraped rows.
  */
 function appendLive(rec, lat, lng) {
-  var live = book().getSheetByName(LIVE_TAB);
-  if (!live) throw new Error('No tab named ' + LIVE_TAB);
-  live.appendRow(byHeader(headerOf(live), {
+  var live = liveTab();
+  var head = headerOf(live);
+  var vals = byHeader(head, {
     name:          str(rec.name),
     category:      [str(rec.group), str(rec.type)].filter(String).join(' / '),
     street:        str(rec.street),
@@ -450,7 +469,9 @@ function appendLive(rec, lat, lng) {
     age_served:    str(rec.age_served),
     confidence:    'submitted',
     active:        'TRUE'
-  }));
+  });
+  live.appendRow(vals);
+  writeLiveRow(live, head, live.getLastRow(), vals);   // zip as text, lat/lng as numbers
 }
 
 // ------------------------------------------------------------- resources

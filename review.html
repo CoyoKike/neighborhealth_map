@@ -10,8 +10,10 @@
   Approval queue for the "List your organization" form on the map.
 
   Submissions arrive through the Apps Script api and sit on the Submissions tab
-  with an empty status. Approving here geocodes the address in the browser and
-  asks the api to append the row to the live tab the map publishes.
+  with an empty status. Every field on a pending card can be edited first — a
+  typo in the name, a missing ZIP, the wrong category. Approving geocodes the
+  address in the browser, writes the edits back to the Submissions row, and
+  asks the api to append the corrected row to the live tab the map publishes.
 
   This page holds no access to the spreadsheet. Sign-in and every read and
   write go through api.js -> apps-script/Code.gs, which is where the rules are.
@@ -32,6 +34,13 @@ window.RV_CONFIG = {
   VIEWBOX:     '-73.55,42.90,-69.85,41.20'
 };
 </script>
+
+<style>
+.row3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 16px; }
+.sent { margin-top: 16px; font-size: 13px; color: var(--ink-40); }
+.sent b { color: var(--ink-60); font-weight: 500; }
+@media (max-width: 720px) { .row3 { grid-template-columns: 1fr; } }
+</style>
 </head>
 
 <body>
@@ -138,7 +147,7 @@ window.RV_CONFIG = {
 
   function record(row, i) {
     var o = {};
-    ['submitted', 'status', 'name', 'group', 'type', 'street', 'city', 'zip', 'phone',
+    ['submitted', 'status', 'name', 'group', 'type', 'street', 'city', 'state', 'zip', 'phone',
      'website', 'hours', 'gender_served', 'age_served', 'notes',
      'submitter_name', 'submitter_email'].forEach(function (k) { o[k] = cell(row, k); });
     o._row = i + 2;                                  // 1-based, past the header
@@ -166,42 +175,73 @@ window.RV_CONFIG = {
     pending.forEach(function (rec) { el.queue.appendChild(card(rec)); });
   }
 
+  // The category picker writes the map's current names. Older spellings on a
+  // submission ("Older Adults", "Addiction & Recovery") are shown under the new
+  // label and kept as they are unless the reviewer actually changes them.
+  var GROUPS = ['Recovery Services', 'Health', 'Senior Services', 'Shelter & Housing',
+                'Food & Basic Needs', 'Community Services', 'Mental Health',
+                'Medication Assisted Treatment (MAT)'];
+  var GROUP_ALIASES = { 'Older Adults': 'Senior Services', 'Addiction & Recovery': 'Recovery Services' };
+  function groupLabel(g) { return GROUP_ALIASES[g] || g; }
+  function padZip(z) {
+    z = String(z || '').trim();
+    return /^\d{1,4}$/.test(z) ? ('00000' + z).slice(-5) : z;
+  }
+
   function card(rec) {
     var c = document.createElement('div');
     c.className = 'card';
 
-    var detail = [
-      ['Category', [rec.group, rec.type].filter(Boolean).join(' / ')],
-      ['Phone',    rec.phone],
-      ['Website',  rec.website ? '<a href="' + esc(rec.website) + '" target="_blank" rel="noopener">' + esc(rec.website) + '</a>' : ''],
-      ['Hours',    rec.hours],
-      ['Serves',   [rec.gender_served, rec.age_served].filter(Boolean).join(' · ')],
-      ['About',    rec.notes],
-      ['Sent by',  [rec.submitter_name, rec.submitter_email].filter(Boolean).join(' — ')]
-    ].filter(function (r) { return r[1]; });
+    function f(key, label, extra) {
+      return '<div class="f"><label>' + label + '</label>' +
+             '<input type="text" data-k="' + key + '" value="' + esc(key === 'zip' ? padZip(rec[key]) : rec[key]) + '"' + (extra || '') + '></div>';
+    }
+    function area(key, label) {
+      return '<div class="f"><label>' + label + '</label>' +
+             '<textarea data-k="' + key + '">' + esc(rec[key]) + '</textarea></div>';
+    }
+    var sel = groupLabel(rec.group);
+    var opts = GROUPS.slice();
+    if (sel && opts.indexOf(sel) === -1) opts.unshift(sel);
 
     c.innerHTML =
       '<div class="card-head">' +
         '<h3>' + esc(rec.name || '(no name given)') + '</h3>' +
-        '<span class="pill">' + esc(rec.group || 'Uncategorised') + '</span>' +
+        '<span class="pill">' + esc(groupLabel(rec.group) || 'Uncategorised') + '</span>' +
         '<span class="when">' + esc(rec.submitted) + '</span>' +
       '</div>' +
-      '<dl>' + detail.map(function (r) {
-        return '<dt>' + r[0] + '</dt><dd>' + (r[0] === 'Website' ? r[1] : esc(r[1])) + '</dd>';
-      }).join('') + '</dl>' +
-      '<div class="boxed"><div class="f">' +
-        '<label>Address to place the pin at — edit it if the geocoder cannot find it</label>' +
-        '<input type="text" value="' + esc(address(rec)) + '">' +
-        '<div class="hint">Approving looks this up, then adds the row to the map.</div>' +
-      '</div></div>' +
+
+      f('name', 'Name', ' required') +
+      '<div class="row2">' +
+        '<div class="f"><label>Category</label><select data-k="group">' +
+          (sel ? '' : '<option value="">Choose…</option>') +
+          opts.map(function (g) {
+            return '<option value="' + esc(g) + '"' + (g === sel ? ' selected' : '') + '>' + esc(g) + '</option>';
+          }).join('') +
+        '</select></div>' +
+        f('type', 'Service type') +
+      '</div>' +
+      f('street', 'Street address') +
+      '<div class="row3">' + f('city', 'City or town') + f('state', 'State') + f('zip', 'ZIP', ' inputmode="numeric"') + '</div>' +
+      '<div class="row2">' + f('phone', 'Phone', ' inputmode="tel"') + f('website', 'Website', ' inputmode="url"') + '</div>' +
+      area('hours', 'Hours') +
+      '<div class="row2">' +
+        f('gender_served', 'Gender served (blank = no restriction)') +
+        f('age_served', 'Age served (blank = no restriction)') +
+      '</div>' +
+      area('notes', 'Notes shown on the card') +
+      '<div class="f"><div class="hint" id="geoHint"></div></div>' +
+      (rec.submitter_name || rec.submitter_email
+        ? '<div class="sent">Sent by <b>' + esc([rec.submitter_name, rec.submitter_email].filter(Boolean).join(' — ')) + '</b></div>'
+        : '') +
+
       '<div class="acts">' +
         '<button class="btn go" type="button" data-act="approve">Approve &amp; add to map</button>' +
         '<button class="btn stop" type="button" data-act="reject">Reject</button>' +
         '<span class="note"></span>' +
       '</div>';
 
-    var addrIn = c.querySelector('.boxed input');
-    var hint = c.querySelector('.hint');
+    var hint = c.querySelector('#geoHint');
     var note = c.querySelector('.note');
 
     function busy(on) { c.classList.toggle('is-busy', !!on); }
@@ -210,6 +250,22 @@ window.RV_CONFIG = {
       if (err.auth) return trouble(err);
       busy(false);
       say(err.message || String(err), 'bad');
+    }
+
+    // What the reviewer sees is what gets approved. Keys are the Submissions
+    // tab's column names; the script merges them into the row before it copies
+    // the row to the live tab.
+    function values() {
+      var v = {};
+      c.querySelectorAll('[data-k]').forEach(function (el) { v[el.dataset.k] = el.value.trim(); });
+      v.zip = padZip(v.zip);
+      v.state = v.state || 'MA';
+      // Keep the sheet's own spelling unless the category was actually changed.
+      if (v.group === groupLabel(rec.group)) v.group = rec.group;
+      return v;
+    }
+    function addressOf(v) {
+      return [v.street, v.city, (v.state + ' ' + v.zip).trim()].filter(Boolean).join(', ');
     }
 
     c.addEventListener('click', function (e) {
@@ -225,15 +281,20 @@ window.RV_CONFIG = {
         return;
       }
 
+      var v = values();
+      if (!v.name) { say('Give it a name first.', 'bad'); c.querySelector('[data-k="name"]').focus(); return; }
+      if (!v.group) { say('Pick a category.', 'bad'); c.querySelector('[data-k="group"]').focus(); return; }
+      if (!v.street || !v.city) { say('It needs a street and a town to be placed.', 'bad'); return; }
+
       busy(true);
       say('Looking up the address…');
-      hint.className = 'hint';
+      hint.className = 'hint'; hint.textContent = '';
 
-      geocode(addrIn.value.trim())
+      geocode(addressOf(v))
         .then(function (pt) {
           if (!pt) {
             hint.className = 'hint bad';
-            hint.textContent = 'No match for that address. Correct it above and approve again — ' +
+            hint.textContent = 'No match for "' + addressOf(v) + '". Correct the address above and approve again — ' +
                                'a street number and a town usually fixes it.';
             busy(false);
             say('Not added.', 'bad');
@@ -241,8 +302,8 @@ window.RV_CONFIG = {
           }
           say('Adding to the map…');
           return NH.call('queue.decide', {
-            row: rec._row, decision: 'approved', lat: pt.lat, lng: pt.lng
-          }).then(function () { finish(c, rec, true); });
+            row: rec._row, decision: 'approved', lat: pt.lat, lng: pt.lng, values: v
+          }).then(function () { rec.name = v.name; finish(c, rec, true); });
         })
         .catch(fail);
     });
