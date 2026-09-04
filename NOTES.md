@@ -316,8 +316,8 @@ sees.
 ## 8. Pin colours and the Senior Services rename (2026-09-04)
 
 The team asked for pins that match the brand. `GROUP_COLORS` now uses the
-January 2024 style guide palette only: Recovery stays purple (Eggplant
-`#633b63`), Senior Services is Warm Blue `#50a7ef`, Health is Cobalt
+January 2024 style guide palette, except Recovery, which keeps its original
+violet `#6a4fa3` by request (the brand's Eggplant read too dark). Senior Services is Warm Blue `#50a7ef`, Health is Cobalt
 `#1e64af`, Shelter is Salmon, Food is Sunshine, Community Services is
 Periwinkle, Mental Health is Forest, MAT is Charcoal. The pale tints (Sky,
 Liliac, Pale Pink) are deliberately unused — too light for a pin.
