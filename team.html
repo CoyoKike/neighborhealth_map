@@ -91,7 +91,11 @@ body.nh-standalone { margin: 0; }
 }
 .p:hover .p-photo { transform: translateY(-3px); box-shadow: 0 14px 26px -14px rgba(23,50,79,.5); }
 
+/* Absolutely positioned so the photo can never size the circle. As a grid
+   item its automatic minimum height was the image's own height at this width,
+   so a portrait photo stretched the box into an oval. */
 .p-photo img {
+  position: absolute; inset: 0;
   width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block;
 }
 .ph { display: grid; place-items: center; gap: 3px; color: var(--ring); }
