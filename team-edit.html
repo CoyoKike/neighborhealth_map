@@ -44,6 +44,8 @@
 .shot .disc svg { width: 30px; height: 30px; color: var(--accent); opacity: .8; }
 .shot input[type=file] { display: none; }
 .shot .pick { width: 100%; }
+.shot .pick + .pick { margin-top: 6px; }
+.shot .pick[hidden] { display: none; }
 .shot .prog {
   position: absolute; inset: 0; background: rgba(255,255,255,.86);
   display: grid; place-items: center; font-size: 11px; font-weight: 600; color: var(--accent-600);
@@ -259,6 +261,14 @@
   // A stored photo is either a Drive file id or a pasted url. Drive's
   // thumbnail endpoint is the one that reliably hotlinks; /uc and /file/d/
   // redirect through a consent page for some accounts.
+  // The stored photo at full size, for Adjust photo. lh3 is the host Drive's
+  // thumbnail redirects to, and it sends CORS headers, so the crop can be saved.
+  function fullPhotoUrl(v) {
+    v = String(v || '').trim();
+    return /^(https?:|data:)/i.test(v) ? v
+      : 'https://lh3.googleusercontent.com/d/' + encodeURIComponent(v) + '=w1600';
+  }
+
   function photoUrl(v, size) {
     v = String(v || '').trim();
     if (!v) return '';
@@ -308,6 +318,8 @@
           '</div>' +
           '<button class="btn ghost sm pick" type="button" data-act="pick">' +
             (photo ? 'Replace photo' : 'Upload photo') + '</button>' +
+          '<button class="btn ghost sm pick" type="button" data-act="adjust"' + (photo ? '' : ' hidden') + '>' +
+            'Adjust photo</button>' +
           '<input type="file" accept="image/*">' +
         '</div>' +
 
@@ -446,6 +458,7 @@
       var act = b.dataset.act;
 
       if (act === 'pick') { file.click(); return; }
+      if (act === 'adjust') { upload(fullPhotoUrl(photo)); return; }
 
       if (act === 'save') {
         busy(true);
@@ -497,10 +510,14 @@
     file.addEventListener('change', function () {
       var f = file.files && file.files[0];
       file.value = '';
-      if (!f) return;
+      if (f) upload(f);
+    });
 
+    // src is a picked File, or the url of the photo already on the card
+    // (Adjust photo). Either way it is framed, then saved as a new photo.
+    function upload(src) {
       var prog;
-      frame(f)
+      frame(src)
         .then(function (dataUrl) {
           if (!dataUrl) return null;   // cancelled
           busy(true);
@@ -525,6 +542,7 @@
           prog.remove();
           disc.innerHTML = '<img alt="" src="' + esc(photoUrl(id)) + '">';
           c.querySelector('[data-act="pick"]').textContent = 'Replace photo';
+          c.querySelector('[data-act="adjust"]').hidden = false;
           busy(false);
           say('Photo saved', 'ok');
         })
@@ -533,7 +551,7 @@
           if (prog) prog.remove();
           fail(err);
         });
-    });
+    }
 
     return c;
   }
@@ -560,13 +578,16 @@
   // (at most MAX_PX) as JPEG. The public page crops the centre of a square, so
   // what they see here is what visitors see. Resolves null on Cancel. Nothing
   // leaves the browser until this has run.
-  function frame(file) {
+  function frame(src) {
     return new Promise(function (resolve, reject) {
-      var url = URL.createObjectURL(file);
+      var isFile = typeof src !== 'string';
+      var url = isFile ? URL.createObjectURL(src) : src;
       var img = new Image();
+      if (!isFile) img.crossOrigin = 'anonymous';   // Drive's image host allows it; needed to save the crop
       img.onerror = function () {
-        URL.revokeObjectURL(url);
-        reject(new Error('That file is not an image the browser can open.'));
+        if (isFile) URL.revokeObjectURL(url);
+        reject(new Error(isFile ? 'That file is not an image the browser can open.'
+          : 'This photo cannot be adjusted here. Use Replace photo and pick the file instead.'));
       };
       img.onload = function () {
         var W = img.naturalWidth, H = img.naturalHeight, V = 240;
@@ -632,7 +653,7 @@
         view.addEventListener('pointercancel', function () { drag = null; });
 
         function close(result) {
-          URL.revokeObjectURL(url);
+          if (isFile) URL.revokeObjectURL(url);
           bg.remove();
           document.removeEventListener('keydown', onKey);
           resolve(result);
