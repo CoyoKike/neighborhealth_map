@@ -86,6 +86,27 @@
 .sw:active { transform: translateY(1px) scale(.96); }
 .sw.is-on { border-color: var(--accent); background: var(--accent-50); box-shadow: 0 0 0 3px rgba(28,117,188,.13); }
 
+/* Framing step: drag the photo inside the circle and zoom, before it uploads. */
+.frame-bg {
+  position: fixed; inset: 0; z-index: 50; background: rgba(23,50,79,.55);
+  display: grid; place-items: center; padding: 16px;
+}
+.frame-box {
+  background: #fff; border-radius: 16px; padding: 20px; width: 100%; max-width: 340px;
+  box-shadow: 0 20px 50px -20px rgba(23,50,79,.6); text-align: center;
+}
+.frame-box h3 { margin: 0 0 4px; font-size: 17px; }
+.frame-box p { margin: 0 0 14px; font-size: 13px; color: var(--ink-60); }
+.frame-view {
+  width: 240px; height: 240px; margin: 0 auto 14px; border-radius: 50%; overflow: hidden;
+  position: relative; background: var(--accent-50); border: 2px solid var(--accent);
+  cursor: grab; touch-action: none; user-select: none;
+}
+.frame-view:active { cursor: grabbing; }
+.frame-view img { position: absolute; left: 0; top: 0; max-width: none; pointer-events: none; }
+.frame-zoom { width: 100%; margin: 0 0 16px; }
+.frame-btns { display: flex; gap: 8px; justify-content: flex-end; }
+
 @media (max-width: 560px) {
   .person { grid-template-columns: 1fr; }
   .shot { display: flex; align-items: center; gap: 14px; text-align: left; }
@@ -478,14 +499,18 @@
       file.value = '';
       if (!f) return;
 
-      busy(true);
-      var prog = document.createElement('div');
-      prog.className = 'prog';
-      prog.textContent = 'Resizing…';
-      disc.appendChild(prog);
-
-      shrink(f)
+      var prog;
+      frame(f)
         .then(function (dataUrl) {
+          if (!dataUrl) return null;   // cancelled
+          busy(true);
+          prog = document.createElement('div');
+          prog.className = 'prog';
+          disc.appendChild(prog);
+          return dataUrl;
+        })
+        .then(function (dataUrl) {
+          if (!dataUrl) throw { cancelled: true };
           prog.textContent = 'Uploading…';
           return NH.call('team.photo', {
             filename: (cell(row, 'name') || 'team').replace(/[^\w -]/g, '') + '.jpg',
@@ -503,7 +528,11 @@
           busy(false);
           say('Photo saved', 'ok');
         })
-        .catch(function (err) { prog.remove(); fail(err); });
+        .catch(function (err) {
+          if (err && err.cancelled) return;
+          if (prog) prog.remove();
+          fail(err);
+        });
     });
 
     return c;
@@ -524,27 +553,111 @@
       .then(function () { el.add.disabled = false; });
   });
 
-  // ---------------------------------------------------------------- resize
+  // ---------------------------------------------------------------- frame
   //
-  // Draws the file to a canvas at most MAX_PX on its long side and re-encodes
-  // as JPEG. Nothing leaves the browser until this has run.
-  function shrink(file) {
+  // Shows the photo in a circle the size of the public card's, lets the person
+  // drag it and zoom until the face sits right, then saves exactly that square
+  // (at most MAX_PX) as JPEG. The public page crops the centre of a square, so
+  // what they see here is what visitors see. Resolves null on Cancel. Nothing
+  // leaves the browser until this has run.
+  function frame(file) {
     return new Promise(function (resolve, reject) {
       var url = URL.createObjectURL(file);
       var img = new Image();
-      img.onload = function () {
-        URL.revokeObjectURL(url);
-        var w = img.naturalWidth, h = img.naturalHeight;
-        var scale = Math.min(1, MAX_PX / Math.max(w, h));
-        var cv = document.createElement('canvas');
-        cv.width = Math.round(w * scale);
-        cv.height = Math.round(h * scale);
-        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-        resolve(cv.toDataURL('image/jpeg', JPEG_Q));
-      };
       img.onerror = function () {
         URL.revokeObjectURL(url);
         reject(new Error('That file is not an image the browser can open.'));
+      };
+      img.onload = function () {
+        var W = img.naturalWidth, H = img.naturalHeight, V = 240;
+        var base = V / Math.min(W, H);         // zoom 1 = the photo just covers the circle
+        var zoom = 1, x = 0, y = 0;            // x, y: top-left of the photo inside the circle, px
+
+        var bg = document.createElement('div');
+        bg.className = 'frame-bg';
+        bg.innerHTML =
+          '<div class="frame-box" role="dialog" aria-modal="true" aria-label="Position the photo">' +
+            '<h3>Position the photo</h3>' +
+            '<p>Drag to move. Use the slider to zoom.</p>' +
+            '<div class="frame-view"></div>' +
+            '<input class="frame-zoom" type="range" min="1" max="3" step="0.01" value="1" aria-label="Zoom">' +
+            '<div class="frame-btns">' +
+              '<button class="btn ghost" type="button" data-f="cancel">Cancel</button>' +
+              '<button class="btn" type="button" data-f="ok">Use photo</button>' +
+            '</div>' +
+          '</div>';
+        var view = bg.querySelector('.frame-view');
+        var slider = bg.querySelector('.frame-zoom');
+        view.appendChild(img);
+
+        function size() { return base * zoom; }
+        function clamp() {   // never let a gap show inside the circle
+          var s = size();
+          x = Math.min(0, Math.max(V - W * s, x));
+          y = Math.min(0, Math.max(V - H * s, y));
+        }
+        function paint() {
+          clamp();
+          var s = size();
+          img.style.width = W * s + 'px';
+          img.style.height = H * s + 'px';
+          img.style.left = x + 'px';
+          img.style.top = y + 'px';
+        }
+        x = (V - W * base) / 2;   // start centred
+        y = (V - H * base) / 2;
+        paint();
+
+        slider.addEventListener('input', function () {
+          var s0 = size(), c = V / 2;
+          zoom = parseFloat(slider.value);
+          var k = size() / s0;               // zoom around the middle of the circle
+          x = c - (c - x) * k;
+          y = c - (c - y) * k;
+          paint();
+        });
+
+        var drag = null;
+        view.addEventListener('pointerdown', function (e) {
+          drag = { px: e.clientX, py: e.clientY, x: x, y: y };
+          view.setPointerCapture(e.pointerId);
+        });
+        view.addEventListener('pointermove', function (e) {
+          if (!drag) return;
+          x = drag.x + e.clientX - drag.px;
+          y = drag.y + e.clientY - drag.py;
+          paint();
+        });
+        view.addEventListener('pointerup', function () { drag = null; });
+        view.addEventListener('pointercancel', function () { drag = null; });
+
+        function close(result) {
+          URL.revokeObjectURL(url);
+          bg.remove();
+          document.removeEventListener('keydown', onKey);
+          resolve(result);
+        }
+        function onKey(e) { if (e.key === 'Escape') close(null); }
+        document.addEventListener('keydown', onKey);
+
+        bg.addEventListener('click', function (e) {
+          var f = e.target.getAttribute && e.target.getAttribute('data-f');
+          if (f === 'cancel' || e.target === bg) return close(null);
+          if (f !== 'ok') return;
+          var s = size();
+          var side = V / s;                  // the square, in the photo's own pixels
+          var out = Math.round(Math.min(MAX_PX, side));
+          var cv = document.createElement('canvas');
+          cv.width = cv.height = out;
+          var g = cv.getContext('2d');
+          g.fillStyle = '#fff';
+          g.fillRect(0, 0, out, out);
+          g.drawImage(img, -x / s, -y / s, side, side, 0, 0, out, out);
+          close(cv.toDataURL('image/jpeg', JPEG_Q));
+        });
+
+        document.body.appendChild(bg);
+        bg.querySelector('[data-f="ok"]').focus();
       };
       img.src = url;
     });
